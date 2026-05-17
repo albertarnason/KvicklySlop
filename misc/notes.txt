@@ -1,0 +1,6 @@
+compile:
+
+1. Åben compiler i terminal
+2. Skriv .\build.bat
+
+
