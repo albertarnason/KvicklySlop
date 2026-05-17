@@ -80,9 +80,6 @@ internal void DEBUGPlatformFreeFileMemory(void *Memory);
 internal bool32 DEBUGPlatformWriteEntireFile(char *Filename, uint32 MemorySize, void *Memory);
 #endif
 
-
-
-
 struct game_offscreen_buffer
 {
     void *Memory;
@@ -148,11 +145,6 @@ inline game_controller_input *GetController(game_input *Input, int unsigned Cont
     return(Result);
 }
 
-struct game_state{
-    int XOffset;
-    int YOffset;
-    int ToneHz;
-};
 
 struct game_memory{
     bool32 IsInitialized;
@@ -162,8 +154,13 @@ struct game_memory{
     void *TransientStorage;  //REQUIRED to be cleared to 0
 };
 
-struct game_clocks{
-    real32 SecondsElapsed; //todo
+internal void GameUpdateAndRender (game_memory *Memory, game_input *Input, game_offscreen_buffer *Buffer);
+internal void GameGetSoundSamples(game_memory *Memory, game_sound_output_buffer *SoundBuffer);
+
+struct game_state{
+    int XOffset;
+    int YOffset;
+    int ToneHz;
 };
 
 #define HANDMADE_H
