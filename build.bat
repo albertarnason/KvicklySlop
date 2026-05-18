@@ -7,7 +7,7 @@ IF NOT EXIST build mkdir build
 pushd build
 
 REM Game DLL
-cl %CommonCompilerFlags% /I "..\SlopEngine\engine" "..\SlopEngine\engine\handmade.cpp" -Fmhandmade.map /LD /link /DLL /EXPORT:GameGetSoundSamples /EXPORT:GameUpdateAndRender
+cl %CommonCompilerFlags% /I "..\SlopEngine\engine" "..\SlopEngine\engine\handmade.cpp" -Fmhandmade.map /LD /link -incremental:no /PDB:handmade.pdb -EXPORT:GameGetSoundSamples -EXPORT:GameUpdateAndRender
 
 REM Win32 platform layer
 cl %CommonCompilerFlags% /I "..\SlopEngine\engine" /I "..\SlopEngine\windows platform" "..\SlopEngine\windows platform\win32_handmade.cpp" -Fmwin32_handmade.map /link %CommonLinkerFlags%

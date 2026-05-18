@@ -1,6 +1,12 @@
 compile:
 
-1. Åben compiler i terminal
+1. Åben compiler i terminal (vcvars64.bat for MSVC visual studios compile)
 2. Skriv .\build.bat i root folder
+3. åben debugger
 
 
+albert compile:
+
+1. cmd /k '"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" && powershell'
+2. .\build.bat
+3. Åben Rad Debugger
