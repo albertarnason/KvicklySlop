@@ -1,20 +1,23 @@
-internal void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_sound_output_buffer *SoundBuffer);
+#include "handmade.h"
 
-internal void GameOutputSound(game_sound_output_buffer *SoundBuffer, int ToneHz){
+internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *SoundBuffer, int ToneHz){
 
-	local_persist real32 tSine;	
+	
 	int16 ToneVolume = 3000;
 	int WavePeriod = SoundBuffer->SamplesPerSecond/ToneHz;
 	int16 *SampleOut = SoundBuffer->Samples;
 
 	for (int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex)
 		{
-			real32 SineValue = sinf(tSine);
+			real32 SineValue = sinf(GameState->tSine);
 			int16 SampleValue = (int16)(SineValue * ToneVolume);
 			*SampleOut++ = SampleValue;
 			*SampleOut++ = SampleValue;
 			
-			tSine += 2.0f*Pi32*1.0f/(real32)WavePeriod;
+			GameState->tSine += 2.0f*Pi32*1.0f/(real32)WavePeriod;
+			if(GameState->tSine > 2.0f*Pi32){
+				GameState->tSine -= 2.0f*Pi32;
+			}
 		}
 
 }
@@ -55,7 +58,8 @@ internal void RenderWeirdGradient(game_offscreen_buffer *Buffer, int BlueOffset,
 	}
 }
 
-internal void GameUpdateAndRender (game_memory *Memory, game_input *Input, game_offscreen_buffer *Buffer){
+//extern "C" is to avoid c++ name mangling for DLL purposes
+extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	
 	//pointer arithmetic to make sure game_button_sate Buttons[] == game_button_state
 	Assert((&Input->Controllers[0].Error - &Input->Controllers[0].Buttons[0]) == (ArrayCount(Input->Controllers[0].Buttons)));
@@ -76,15 +80,16 @@ internal void GameUpdateAndRender (game_memory *Memory, game_input *Input, game_
 		ReadEntireFileIntoMemory(FileName, BitmapMemory);
 */
 
-		debug_read_file_result File = DEBUGPlatformReadEntireFile(Filename);
+		debug_read_file_result File = Memory->DEBUGPlatformReadEntireFile(Filename);
 		if(File.Contents)
 		{
 			//works
-			DEBUGPlatformWriteEntireFile("C:/Users/walla/src/Handmadehero/Handmade/Handmade/Debug/test.out", File.ContentsSize, File.Contents);
-			DEBUGPlatformFreeFileMemory(File.Contents);
+			Memory->DEBUGPlatformWriteEntireFile("C:/Users/walla/src/Handmadehero/Handmade/Handmade/Debug/test.out", File.ContentsSize, File.Contents);
+			Memory->DEBUGPlatformFreeFileMemory(File.Contents);
 		}
 
 		GameState->ToneHz = 256;
+		GameState->tSine  = 0.0f;
 		Memory->IsInitialized = true;
 	
 	};
@@ -116,9 +121,15 @@ internal void GameUpdateAndRender (game_memory *Memory, game_input *Input, game_
 
 //has to be a fast function, no more than 1ms!
 //todo reduce pressure on function performance by measuring it or asking about it
-internal void GameGetSoundSamples(game_memory *Memory, game_sound_output_buffer *SoundBuffer){
+extern "C" GAME_GET_SOUND_SAMPLES(GameGetSoundSamples){
 	game_state *GameState = (game_state *)Memory->PermanentStorage;
-	GameOutputSound(SoundBuffer, GameState->ToneHz);
+	GameOutputSound(GameState, SoundBuffer, GameState->ToneHz);
 }
 
+#if HANDMADE_WIN32
+#include "windows.h"
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved){
+	return true;
+}
+#endif
 
