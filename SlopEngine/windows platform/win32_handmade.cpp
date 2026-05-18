@@ -188,7 +188,7 @@ struct win32_game_code
 
 internal win32_game_code Win32LoadGameCode(void){
 	win32_game_code Result = {};
-	CopyFile("handmade.exe", "handmade_temp.dll", FALSE);
+	CopyFile("handmade.dll", "handmade_temp.dll", FALSE);
 	Result.GameCodeDLL = LoadLibraryA("handmade_temp.dll");
 	if(Result.GameCodeDLL){
 		Result.GetSoundSamples = (game_get_sound_samples *)GetProcAddress(Result.GameCodeDLL, "GameGetSoundSamples");

@@ -50,7 +50,7 @@ internal void RenderWeirdGradient(game_offscreen_buffer *Buffer, int BlueOffset,
 			// *Pixel++, the ++ is post increment operator, so after expression add 1
 			//Also C is doing a 1*(sizeof uint32) aka = 4 so the expression adds 4
 			//Shifting green value 8bits (2 bytes) left and OR'ing with blue
-			*Pixel++ = ((Green << 8) | Blue);
+			*Pixel++ = ((Green << 16) | Blue);
 			//memory = BB GG RR xx
 			//Register = xx RR GG BB 
 		}
