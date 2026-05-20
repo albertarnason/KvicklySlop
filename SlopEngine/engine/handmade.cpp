@@ -9,6 +9,8 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 
 	for (int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex)
 		{
+//sound flag
+#if 0	
 			real32 SineValue = sinf(GameState->tSine);
 			int16 SampleValue = (int16)(SineValue * ToneVolume);
 			*SampleOut++ = SampleValue;
@@ -18,8 +20,27 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 			if(GameState->tSine > 2.0f*Pi32){
 				GameState->tSine -= 2.0f*Pi32;
 			}
+			
+#endif
+
 		}
 
+}
+
+internal void RenderPlayer(game_offscreen_buffer *Buffer, int PlayerX, int PlayerY){
+	uint8 *EndOfBuffer = (uint8 *)Buffer->Memory + Buffer->Pitch*Buffer->Height;
+	uint32 color = 0xFFFFFFFF;
+	int top = PlayerY;
+	int bottom = PlayerY+10;
+	for(int X = PlayerX; X < PlayerX+10; ++X){
+		uint8 *pixel = ((uint8 *)Buffer->Memory + X*Buffer->BytesPerPixel + top*Buffer->Pitch);
+		for (int Y = top; Y < bottom; ++Y){
+			if((pixel >= Buffer->Memory) && ((pixel+4) <= EndOfBuffer)){
+				*(uint32 *)pixel = color;
+			}
+			pixel += Buffer->Pitch;
+		}
+	}
 }
 
 internal void RenderWeirdGradient(game_offscreen_buffer *Buffer, int BlueOffset, int GreenOffset)
@@ -91,6 +112,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		GameState->ToneHz = 256;
 		GameState->tSine  = 0.0f;
 		Memory->IsInitialized = true;
+		GameState->PlayerX = 100;
+		GameState->PlayerY = 100;
 	
 	};
 
@@ -103,20 +126,35 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		} 
 		else {
 			//Keyboard movement
+			/*
 			if(Controller->ActionLeft .EndedDown){GameState->XOffset -= 1;}
 			if(Controller->ActionRight.EndedDown){GameState->XOffset += 1;}
 			if(Controller->ActionUp   .EndedDown){GameState->YOffset -= 1;}
 			if(Controller->ActionDown .EndedDown){GameState->YOffset += 1;}
+			*/
+			if(Controller->MoveLeft   .EndedDown){GameState->PlayerX -= 10;}
+			if(Controller->MoveRight  .EndedDown){GameState->PlayerX += 10;}
+			if(Controller->MoveUp     .EndedDown){GameState->PlayerY -= 10;}
+			if(Controller->MoveDown   .EndedDown){GameState->PlayerY += 10;}
+
+			//bad jump code
+			if(GameState->jumptimer > 0){
+				GameState->PlayerY += (int)(3.0f*sinf(0.5f*Pi32*GameState->jumptimer));
+			}
+			if(Controller->ActionUp.EndedDown){
+				GameState->jumptimer = 4.0f;
+			}
 			
-			if(Controller->MoveLeft   .EndedDown){GameState->XOffset -= 1;}
-			if(Controller->MoveRight  .EndedDown){GameState->XOffset += 1;}
-			if(Controller->MoveUp     .EndedDown){GameState->YOffset -= 1;}
-			if(Controller->MoveDown   .EndedDown){GameState->YOffset += 1;}
+			GameState->jumptimer -=0.033f;
+
+		
+			
 		}
 
 	}
 
     RenderWeirdGradient(Buffer, GameState->XOffset, GameState->YOffset);
+	RenderPlayer(Buffer, GameState->PlayerX, GameState->PlayerY);
 }
 
 //has to be a fast function, no more than 1ms!

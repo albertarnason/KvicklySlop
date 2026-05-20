@@ -68,6 +68,17 @@ struct win32_debug_time_marker
 	DWORD ExpectedFlipPlayCursor;
 };
 
+struct win32_state
+{
+	HANDLE RecordingHandle;
+	HANDLE PlaybackHandle;
+	int input_recording_index;
+	int input_playing_index;
+
+	void *GameMemoryBlock;
+	uint64 TotalSize;
+};
+
 
 global_variable bool GlobalRunning;
 global_variable bool GlobalPause;
@@ -558,7 +569,61 @@ internal real32 Win32ProcessXInputStickValue(SHORT Value, SHORT DeadZoneThreshol
 	return Result;
 }
 
-internal void Win32ProcessPendingMessages(game_controller_input *KeyboardController){
+
+internal void Win32BeginRecordingInput(win32_state *Win32State, int input_recording_index){
+	char *filename = "recordedinputs.hmi";
+	Win32State->input_recording_index = input_recording_index;
+	Win32State->RecordingHandle = CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+
+//dumps entire memory state to disk, capped at a bit under 4GB
+	DWORD BytesToWrite = (DWORD)Win32State->TotalSize;
+	Assert(Win32State->TotalSize == BytesToWrite);
+	DWORD BytesWritten;
+	WriteFile(Win32State->RecordingHandle, Win32State->GameMemoryBlock, BytesToWrite, &BytesWritten, 0);
+}
+
+internal void Win32EndRecordingInput(win32_state *Win32State){
+	CloseHandle(Win32State->RecordingHandle);
+	Win32State->input_recording_index = 0;
+}
+
+internal void Win32BeginInputPlayback(win32_state *Win32State, int input_playing_index){
+	char *filename = "recordedinputs.hmi";
+	Win32State->input_playing_index =  input_playing_index;
+	Win32State->PlaybackHandle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+
+	DWORD BytesToRead = (DWORD)Win32State->TotalSize;
+	Assert(Win32State->TotalSize == BytesToRead);
+	DWORD BytesRead;
+	//
+	ReadFile(Win32State->PlaybackHandle, Win32State->GameMemoryBlock, BytesToRead, &BytesRead, 0);
+}
+
+internal void Win32EndInputPlayback(win32_state *Win32State){
+	CloseHandle(Win32State->PlaybackHandle);
+	Win32State->input_playing_index = 0;
+}
+internal void Win32RecordInput(win32_state *Win32State, game_input *input_to_record){
+	DWORD BytesWritten;
+	WriteFile(Win32State->RecordingHandle, input_to_record, sizeof(*input_to_record), &BytesWritten, 0);
+}
+
+internal void Win32PlaybackInput(win32_state *Win32State, game_input *input_to_playback){
+	DWORD BytesRead = 0;
+
+	if(ReadFile(Win32State->PlaybackHandle, input_to_playback, sizeof(*input_to_playback), &BytesRead, 0)){
+		if(BytesRead == 0)
+		{
+			//hit end of stream, go back to beginning
+			int playing_index = Win32State->input_playing_index;
+			Win32EndInputPlayback(Win32State);
+			Win32BeginInputPlayback(Win32State, playing_index);
+		}
+	}
+}
+
+
+internal void Win32ProcessPendingMessages(win32_state *Win32State, game_controller_input *KeyboardController){
 
 MSG Message;
 //has to process the message queue from windows
@@ -592,6 +657,24 @@ MSG Message;
 					else if (VKCode == VK_RIGHT)   { Win32ProcessKeyboardMessage(&KeyboardController->ActionRight, 	     IsDown);}
 					else if (VKCode == VK_SPACE)   { Win32ProcessKeyboardMessage(&KeyboardController->Back, 	     	 IsDown);}
 					else if (VKCode == VK_ESCAPE)  { Win32ProcessKeyboardMessage(&KeyboardController->Start, 	    	 IsDown);}
+					//loop mode
+					else if (VKCode == 'L'){
+						if(IsDown){
+							if(Win32State->input_recording_index == 0){
+								Win32BeginRecordingInput(Win32State, 1);
+							}
+							else{
+								Win32EndRecordingInput(Win32State);
+								Win32BeginInputPlayback(Win32State, 1);
+							}
+							}
+						}
+					//loop mode slot key
+					else if (VKCode == '1'){}
+					else if (VKCode == '2'){}
+					else if (VKCode == '3'){}
+					else if (VKCode == '4'){}
+
 #if HANDMADE_INTERNAL
 					else if (VKCode == 'P')        { if(IsDown){GlobalPause = !GlobalPause;}  }																	
 #endif 
@@ -709,6 +792,7 @@ internal void StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCou
 	*Dest++ = 0;
 }
 
+
 int CALLBACK WinMain(
 	HINSTANCE Instance,
 	HINSTANCE PrevInstance,
@@ -769,7 +853,12 @@ int CALLBACK WinMain(
   	if(RegisterClassA(&WindowClass))
   	{
 		HWND Window = CreateWindowExA(
-			0, //dwExStyle
+#if 0
+WS_EX_TOPMOST //dwExStyle
+#else
+ 0
+#endif
+			, 
 			WindowClass.lpszClassName, //lpClassName
 			"HandmadeHero", //lpWindowName
 			WS_OVERLAPPEDWINDOW|WS_VISIBLE, //dwStyle
@@ -798,6 +887,9 @@ int CALLBACK WinMain(
 			Win32ClearBuffer(&SoundOutput);
 			GlobalSecondaryBuffer->Play(0,0, DSBPLAY_LOOPING);
 
+			//to record inputs for playback so far
+			win32_state Win32State = {};
+			
 			GlobalRunning = true;
 #if 0
 			//testing playcursor/writecursor update frequency
@@ -822,7 +914,7 @@ LPVOID BaseAdress = 0;
 
 			game_memory GameMemory = {};
 			GameMemory.PermanentStorageSize = Megabytes(64);
-			GameMemory.TransientStorageSize = Gigabytes((uint64)4);
+			GameMemory.TransientStorageSize = Gigabytes((uint64)1);
 			//initialising function pointers
 			GameMemory.DEBUGPlatformFreeFileMemory  = DEBUGPlatformFreeFileMemory;
 			GameMemory.DEBUGPlatformReadEntireFile  = DEBUGPlatformReadEntireFile;
@@ -830,9 +922,9 @@ LPVOID BaseAdress = 0;
 			
 			
 			
-			uint64 TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
-
-			GameMemory.PermanentStorage = VirtualAlloc(BaseAdress, TotalSize,  MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+			Win32State.TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
+			Win32State.GameMemoryBlock = VirtualAlloc(BaseAdress, (size_t)Win32State.TotalSize,  MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+			GameMemory.PermanentStorage = Win32State.GameMemoryBlock;
 			GameMemory.TransientStorage = ((uint8 *)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);
 
 			if(Samples && GameMemory.PermanentStorage && GameMemory.TransientStorage)
@@ -875,7 +967,7 @@ LPVOID BaseAdress = 0;
 						NewKeyboardController->Buttons[ButtonIndex].EndedDown = OldKeyboardController->Buttons[ButtonIndex].EndedDown;
 					}
 					
-					Win32ProcessPendingMessages(NewKeyboardController);
+					Win32ProcessPendingMessages(&Win32State, NewKeyboardController);
 
 					if (!GlobalPause)
 					{
@@ -936,6 +1028,15 @@ LPVOID BaseAdress = 0;
 						Buffer.Width  = GlobalBackBuffer.Width;
 						Buffer.Height = GlobalBackBuffer.Height;
 						Buffer.Pitch  = GlobalBackBuffer.Pitch;
+						Buffer.BytesPerPixel = GlobalBackBuffer.BytesPerPixel;
+
+						if(Win32State.input_recording_index){
+							Win32RecordInput (&Win32State, NewInput);
+						}
+						if(Win32State.input_playing_index){
+							Win32PlaybackInput(&Win32State, NewInput);
+						}
+
 						Game.UpdateAndRender(&GameMemory, NewInput, &Buffer);
 						
 						
