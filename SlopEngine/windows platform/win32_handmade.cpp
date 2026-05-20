@@ -618,6 +618,7 @@ internal void Win32PlaybackInput(win32_state *Win32State, game_input *input_to_p
 			int playing_index = Win32State->input_playing_index;
 			Win32EndInputPlayback(Win32State);
 			Win32BeginInputPlayback(Win32State, playing_index);
+			ReadFile(Win32State->PlaybackHandle, input_to_playback, sizeof(*input_to_playback), &BytesRead, 0);
 		}
 	}
 }
