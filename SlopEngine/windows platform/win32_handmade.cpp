@@ -996,9 +996,9 @@ LPVOID BaseAdress = 0;
 				replay_buffer->Filehandle = CreateFileA(replay_buffer->Filename, GENERIC_WRITE|GENERIC_READ, 0, 0, CREATE_ALWAYS, 0, 0);
 
 
-				DWORD max_size_high = (DWORD)(Win32State.TotalSize >> 32);
-				DWORD max_size_low  = (DWORD)(Win32State.TotalSize & 0xFFFFFFFF);
-				replay_buffer->MemoryMap = CreateFileMappingA(replay_buffer->Filehandle, 0 , PAGE_READWRITE, max_size_high, max_size_low, 0);
+				LARGE_INTEGER max_size;
+				max_size.QuadPart = Win32State.TotalSize;
+				replay_buffer->MemoryMap = CreateFileMappingA(replay_buffer->Filehandle, 0 , PAGE_READWRITE, max_size.HighPart, max_size.LowPart, 0);
 				DWORD Error = GetLastError();
 
 				replay_buffer->MemoryBlock = MapViewOfFile(replay_buffer->MemoryMap, FILE_MAP_ALL_ACCESS, 0, 0, Win32State.TotalSize);
