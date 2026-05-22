@@ -887,6 +887,7 @@ int CALLBACK WinMain(
 	Win32LoadXInpuT();
 
 	WNDCLASSA WindowClass = {};
+	//display size
 	Win32ReSizeDIBSection(&GlobalBackBuffer, 1280, 720);
 	WindowClass.style = CS_HREDRAW|CS_VREDRAW|CS_OWNDC;
 	WindowClass.lpfnWndProc = Win32MainWindowCallback;
@@ -1015,6 +1016,7 @@ LPVOID BaseAdress = 0;
 				game_input Input [2] = {};
 				game_input *NewInput = &Input[0];
 				game_input *OldInput = &Input[1];
+				NewInput->SecondsToAdvanceOverUpdate = target_seconds_per_frame;
 				
 				LARGE_INTEGER LastCounter   =  Win32GetWallClock();
 				LARGE_INTEGER FlipWallClock =  Win32GetWallClock();

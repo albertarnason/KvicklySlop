@@ -147,7 +147,7 @@ struct game_input{
     int32 MouseX;
     int32 MouseY;
     int32 MouseZ; //idk why mousez should be a thing
-    //insert clock values here.
+    real32 SecondsToAdvanceOverUpdate;
     game_controller_input Controllers[5];
 };
 inline game_controller_input *GetController(game_input *Input, int unsigned ControllerIndex){
@@ -183,6 +183,11 @@ typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
 
 
 struct game_state{
+
+
+
+
+    //note below is only for debug showcases, not important!
     int XOffset;
     int YOffset;
     int ToneHz;
