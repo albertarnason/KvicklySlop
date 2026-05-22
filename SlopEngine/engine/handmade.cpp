@@ -7,8 +7,7 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 	int WavePeriod = SoundBuffer->SamplesPerSecond/ToneHz;
 	int16 *SampleOut = SoundBuffer->Samples;
 
-	for (int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex)
-		{
+	for (int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex){
 //sound flag
 #if 0	
 			real32 SineValue = sinf(GameState->tSine);
@@ -23,7 +22,7 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 			
 #endif
 
-		}
+	}
 
 }
 
@@ -101,12 +100,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		ReadEntireFileIntoMemory(FileName, BitmapMemory);
 */
 
-		debug_read_file_result File = Memory->DEBUGPlatformReadEntireFile(Filename);
+		debug_read_file_result File = Memory->DEBUGPlatformReadEntireFile(Thread, Filename);
 		if(File.Contents)
 		{
 			//works
-			Memory->DEBUGPlatformWriteEntireFile("C:/Users/walla/src/Handmadehero/Handmade/Handmade/Debug/test.out", File.ContentsSize, File.Contents);
-			Memory->DEBUGPlatformFreeFileMemory(File.Contents);
+			Memory->DEBUGPlatformWriteEntireFile(Thread, "C:/Users/walla/src/Handmadehero/Handmade/Handmade/Debug/test.out", File.ContentsSize, File.Contents);
+			Memory->DEBUGPlatformFreeFileMemory(Thread, File.Contents);
 		}
 
 		GameState->ToneHz = 256;
@@ -154,7 +153,14 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	}
 
     RenderWeirdGradient(Buffer, GameState->XOffset, GameState->YOffset);
-	RenderPlayer(Buffer, GameState->PlayerX, GameState->PlayerY);
+	RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
+	
+	for(int button_index = 0; button_index < ArrayCount(Input->MouseButtons); ++button_index){
+		if(Input->MouseButtons[button_index].EndedDown){
+			RenderPlayer(Buffer, 10 + 20*button_index, 10);
+		}
+	}
+	
 }
 
 //has to be a fast function, no more than 1ms!
