@@ -860,6 +860,10 @@ int CALLBACK WinMain(
 	LPSTR     CommandLine,
 	int       ShowCode){
 	
+	AllocConsole();
+	FILE *f;
+	freopen_s(&f, "CONOUT$", "w", stdout);
+
 	win32_state Win32State = {};
 
 	Win32GetEXEFileName(&Win32State);
@@ -887,7 +891,7 @@ int CALLBACK WinMain(
 	Win32LoadXInpuT();
 
 	WNDCLASSA WindowClass = {};
-	//display size
+	//display size	
 	Win32ReSizeDIBSection(&GlobalBackBuffer, 1280, 720);
 	WindowClass.style = CS_HREDRAW|CS_VREDRAW|CS_OWNDC;
 	WindowClass.lpfnWndProc = Win32MainWindowCallback;
@@ -1016,12 +1020,12 @@ LPVOID BaseAdress = 0;
 				game_input Input [2] = {};
 				game_input *NewInput = &Input[0];
 				game_input *OldInput = &Input[1];
-				NewInput->SecondsToAdvanceOverUpdate = target_seconds_per_frame;
+				
 				
 				LARGE_INTEGER LastCounter   =  Win32GetWallClock();
 				LARGE_INTEGER FlipWallClock =  Win32GetWallClock();
 				
-				int debug_time_marker_index = 0;
+				int debug_time_marker_index  = 0;
 				win32_debug_time_marker debug_time_markers[30] = {0};
 				
 				DWORD  last_play_cursor      = 0;
@@ -1137,6 +1141,9 @@ LPVOID BaseAdress = 0;
 						if(Win32State.input_playing_index){
 							Win32PlaybackInput(&Win32State, NewInput);
 						}
+
+						NewInput->dtForFrame = target_seconds_per_frame;
+
 						if(Game.UpdateAndRender){
 							
 							Game.UpdateAndRender(&Thread, &GameMemory, NewInput, &Buffer);

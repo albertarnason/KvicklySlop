@@ -1,4 +1,5 @@
 #include "handmade.h"
+#include <stdio.h>
 
 internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *SoundBuffer, int ToneHz){
 
@@ -9,7 +10,7 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 
 	for (int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex){
 //sound flag for debug sound
-#if 0	
+#if 1	
 			real32 SineValue = sinf(GameState->tSine);
 			int16 SampleValue = (int16)(SineValue * ToneVolume);
 			*SampleOut++ = SampleValue;
@@ -28,7 +29,7 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 
 internal void RenderPlayer(game_offscreen_buffer *Buffer, int PlayerX, int PlayerY){
 	uint8 *EndOfBuffer = (uint8 *)Buffer->Memory + Buffer->Pitch*Buffer->Height;
-	uint32 color = 0xFFFFFFFF;
+	uint32 color = 0xFFFF00FF;
 	int top = PlayerY;
 	int bottom = PlayerY+10;
 	for(int X = PlayerX; X < PlayerX+10; ++X){
@@ -92,6 +93,7 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, real32 real_min_X, re
 
 
 
+
 //extern "C" is to avoid c++ name mangling for DLL purposes
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	
@@ -123,8 +125,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		}
 
 	}
-
-
+	real32 timedelta = Input->dtForFrame;
+	printf("%f\n", timedelta);
 
 
 
@@ -140,7 +142,7 @@ DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height,
 DrawRectangle(Buffer, -10.0f, 10.0f, 300.0f, 300.0f, 0x0000FFFF);
 
    /*old render + mouse input showcase code*/
-#if 0
+#if 1
     RenderWeirdGradient(Buffer, GameState->XOffset, GameState->YOffset);
 	RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
 	

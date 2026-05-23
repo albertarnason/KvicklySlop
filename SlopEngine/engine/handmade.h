@@ -147,7 +147,7 @@ struct game_input{
     int32 MouseX;
     int32 MouseY;
     int32 MouseZ; //idk why mousez should be a thing
-    real32 SecondsToAdvanceOverUpdate;
+    real32 dtForFrame;
     game_controller_input Controllers[5];
 };
 inline game_controller_input *GetController(game_input *Input, int unsigned ControllerIndex){
