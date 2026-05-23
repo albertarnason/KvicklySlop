@@ -1,6 +1,7 @@
 #include "handmade.h"
 #include <stdio.h>
 
+
 internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *SoundBuffer, int ToneHz){
 
 	
@@ -103,6 +104,34 @@ internal void SpawnEntity(game_state *GameState, real32 X, real32 Y, uint32 colo
 		E->IsActive  = true;
 }
 
+internal temporary_memory TemporaryMemoryNew (memory_arena *Arena){
+		temporary_memory result;
+		result.Arena = Arena;
+		result.Used  = Arena->Used;
+		return result;
+}
+
+
+internal void EndTemporaryMemory(temporary_memory TempMem){
+    TempMem.Arena->Used = TempMem.Used;  // rewind back to the snapshot
+}
+
+internal void *ArenaPush(memory_arena *Arena, size_t Size)
+{
+    Assert(Arena->Used + Size <= Arena->Size);
+    void *Result = Arena->Base + Arena->Used;
+    Arena->Used += Size;
+    return Result;
+}
+
+internal void *ArenaPushZero(memory_arena *Arena, size_t Size)
+{
+    void *Result = ArenaPush(Arena, Size);
+    // zero the memory
+    uint8 *Byte = (uint8 *)Result;
+    while(Size--){ *Byte++ = 0; }
+    return Result;
+}
 
 //extern "C" is to avoid c++ name mangling for DLL purposes
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
@@ -114,12 +143,19 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	
 	game_state *GameState = (game_state *)Memory->PermanentStorage;
 	if(!Memory->IsInitialized){
-	
+		// arena allocation
+		
+		GameState->Arena.Size = Memory->TransientStorageSize;
+		GameState->Arena.Base = (uint8 *)Memory->TransientStorage;
+		GameState->Arena.Used = 0;
 				
 		SpawnEntity(GameState, (real32)10, (real32)10, 0xFFFFFFFF);
+
 		Memory->IsInitialized = true;
-	
+		
 	};
+	temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
+	
 
 	//For loop for multiple controller inputs hmm
 	for(int ControllerIndex = 0; ControllerIndex <ArrayCount(Input->Controllers); ++ControllerIndex){
@@ -139,12 +175,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	}
 	real32 timedelta = Input->dtForFrame;
 	printf("%f\n", timedelta);
-	
-	
+
+
 //screen clear call
 DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height, 0x00FF00FF);
 uint32 color = 0xFFFFFFFF;
-
+#if 0 //Entity spawning and moving
 for (int i = 0; i < MAX_ENTITIES/10; ++i){
 	if (i > 0){
 		color = color * i;
@@ -168,7 +204,7 @@ for(int i = 0; i < GameState->EntityCount; ++i)
                   Entity->Y + Entity->Height, 
                   Entity->Color);
 }
-
+#endif
 
 
 
@@ -190,6 +226,8 @@ RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
 	}
 #endif
 	
+
+EndTemporaryMemory(temp_memory);
 }
 
 //has to be a fast function, no more than 1ms!

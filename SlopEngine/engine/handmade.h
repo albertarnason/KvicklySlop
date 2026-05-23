@@ -10,6 +10,16 @@
 //be careful with macros, put extra parenthesis if some inputs will mess with functionality
 //such as passing foo+bar next to [0] for bar[0]
 
+//only for gamelayer atm
+#define PushArray(arena, type, count) (type *)ArenaPush((arena), sizeof(type)*(count))
+#define PushArrayZero(arena, type, count) (type *)ArenaPushZero((arena), sizeof(type)*(count))
+#define PushStruct(arena, type) PushArray((arena), (type), 1)
+#define PushStructZero(arena, type) PushArrayZero((arena), (type), 1)
+
+internal void *ArenaPush(memory_arena *Arena, size_t Size);
+
+internal void *ArenaPushZero(memory_arena *Arena, size_t Size);
+
 /*
 HANDMADE_INTERNAL:
 0 - build for public
@@ -210,6 +220,18 @@ struct game_state{
     int PlayerX;
     int PlayerY;
     real32 jumptimer;
+    memory_arena Arena;
+};
+
+struct memory_arena{
+    size_t Size;
+    uint8 *Base;
+    size_t Used;
+};
+
+struct temporary_memory{
+    memory_arena *Arena;
+    size_t Used;
 };
 
 #define HANDMADE_H
