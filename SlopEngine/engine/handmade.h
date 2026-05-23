@@ -185,7 +185,7 @@ typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
 struct game_state{
 
 
-
+    real32 timer;
 
     //note below is only for debug showcases, not important!
     int XOffset;

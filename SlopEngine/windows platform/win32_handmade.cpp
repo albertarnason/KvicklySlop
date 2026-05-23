@@ -933,7 +933,8 @@ WS_EX_TOPMOST
 				monitor_refresh_hz = Win32RefreshRate;
 			}
 			//game_update_hz currently fixed to variable monitor_refresh_rate, should probably be fixed to a constant
-			real32 game_update_hz = (real32)(monitor_refresh_hz / 2);
+			//(real32)(monitor_refresh_hz / 2)
+			real32 game_update_hz = 30.0f;
 			real32 target_seconds_per_frame = 1.0f / (real32)game_update_hz;
 
 

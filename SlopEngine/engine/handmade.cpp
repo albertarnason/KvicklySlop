@@ -29,10 +29,10 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 
 internal void RenderPlayer(game_offscreen_buffer *Buffer, int PlayerX, int PlayerY){
 	uint8 *EndOfBuffer = (uint8 *)Buffer->Memory + Buffer->Pitch*Buffer->Height;
-	uint32 color = 0xFFFF00FF;
+	uint32 color = 0xFF0000FF;
 	int top = PlayerY;
-	int bottom = PlayerY+10;
-	for(int X = PlayerX; X < PlayerX+10; ++X){
+	int bottom = PlayerY+100;
+	for(int X = PlayerX; X < PlayerX+100; ++X){
 		uint8 *pixel = ((uint8 *)Buffer->Memory + X*Buffer->BytesPerPixel + top*Buffer->Pitch);
 		for (int Y = top; Y < bottom; ++Y){
 			if((pixel >= Buffer->Memory) && ((pixel+4) <= EndOfBuffer)){
@@ -139,10 +139,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 
 
 DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height, 0x00FF00FF);
-DrawRectangle(Buffer, -10.0f, 10.0f, 300.0f, 300.0f, 0x0000FFFF);
-
+GameState->timer += timedelta;
+real32 move_cyan_block_value = 0.0f;
+move_cyan_block_value = GameState->timer*3;
+DrawRectangle(Buffer, 10.0f*move_cyan_block_value, 10.0f*move_cyan_block_value, 300.0f+10.0f*move_cyan_block_value, 300.0f+10.0f*move_cyan_block_value, 0x0000FFFF);
+RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
    /*old render + mouse input showcase code*/
-#if 1
+#if 0
     RenderWeirdGradient(Buffer, GameState->XOffset, GameState->YOffset);
 	RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
 	
