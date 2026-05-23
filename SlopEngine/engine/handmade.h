@@ -182,8 +182,23 @@ typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
 
 
-struct game_state{
 
+struct entity{
+    real32 X;
+    real32 Y;
+    real32 Width;
+    real32 Height;
+    uint32 Color;
+    real32 VelocityX;
+    real32 VelocityY;
+    bool32 IsActive;
+};
+
+#define MAX_ENTITIES 1024
+
+struct game_state{
+    int EntityCount;
+    entity Entities[MAX_ENTITIES];
 
     real32 timer;
 

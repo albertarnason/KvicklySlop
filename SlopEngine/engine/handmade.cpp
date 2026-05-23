@@ -91,7 +91,17 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, real32 real_min_X, re
 	}
 }
 
-
+internal void SpawnEntity(game_state *GameState, real32 X, real32 Y, uint32 color){
+		entity *E = &GameState->Entities[GameState->EntityCount++];
+		E->X         = X;
+		E->Y         = Y;
+		E->Width     = 50.0f;
+		E->Height    = 50.0f;
+		E->Color     = color;
+		E->VelocityX = 100.0f;
+		E->VelocityY = 50.0f;
+		E->IsActive  = true;
+}
 
 
 //extern "C" is to avoid c++ name mangling for DLL purposes
@@ -104,7 +114,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	
 	game_state *GameState = (game_state *)Memory->PermanentStorage;
 	if(!Memory->IsInitialized){
-
+	
+				
+		SpawnEntity(GameState, (real32)10, (real32)10, 0xFFFFFFFF);
 		Memory->IsInitialized = true;
 	
 	};
@@ -119,26 +131,48 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 			if(Controller->MoveRight  .EndedDown){GameState->PlayerX += 10;}
 			if(Controller->MoveUp     .EndedDown){GameState->PlayerY -= 10;}
 			if(Controller->MoveDown   .EndedDown){GameState->PlayerY += 10;}
-
-
+			
+			
 			
 		}
-
+		
 	}
 	real32 timedelta = Input->dtForFrame;
 	printf("%f\n", timedelta);
-
-
-
-
-
-
-
-
-
-
-
+	
+	
+//screen clear call
 DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height, 0x00FF00FF);
+uint32 color = 0xFFFFFFFF;
+
+for (int i = 0; i < MAX_ENTITIES/10; ++i){
+	if (i > 0){
+		color = color * i;
+	}
+ SpawnEntity(GameState, (real32)10+(i*4),(real32)10+(i*4), color);
+}
+
+for(int i = 0; i < GameState->EntityCount; ++i)
+{
+	
+    entity *Entity = &GameState->Entities[i];
+
+	
+    if(!Entity->IsActive) continue;
+
+    Entity->X += Entity->VelocityX * Input->dtForFrame;
+    Entity->Y += Entity->VelocityY * Input->dtForFrame;
+
+    DrawRectangle(Buffer, Entity->X, Entity->Y, 
+                  Entity->X + Entity->Width, 
+                  Entity->Y + Entity->Height, 
+                  Entity->Color);
+}
+
+
+
+
+
 GameState->timer += timedelta;
 real32 move_cyan_block_value = 0.0f;
 move_cyan_block_value = GameState->timer*3;
