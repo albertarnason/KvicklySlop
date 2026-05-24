@@ -175,11 +175,11 @@ struct game_memory{
 //function macro definitions to allow DLL to work
 //equivalent to void GameUpdateAndRender (game_memory *Memory, game_input *Input, game_offscreen_buffer *Buffer);
 //No stubs, have to check for null when calling!
+extern "C" void GameUpdateAndRender(thread_context *Thread, game_memory *Memory, game_input *Input, game_offscreen_buffer *Buffer);
 #define GAME_UPDATE_AND_RENDER(name) void name (thread_context *Thread, game_memory *Memory, game_input *Input, game_offscreen_buffer *Buffer)
-typedef GAME_UPDATE_AND_RENDER(game_update_and_render);
 
+extern "C" void GameGetSoundSamples(thread_context *Thread, game_memory *Memory, game_sound_output_buffer *SoundBuffer);
 #define GAME_GET_SOUND_SAMPLES(name) void name (thread_context *Thread, game_memory *Memory, game_sound_output_buffer *SoundBuffer)
-typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
 
 
 struct game_state{
