@@ -97,7 +97,7 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, real32 real_min_X, re
 //extern "C" is to avoid c++ name mangling for DLL purposes
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	//Void unused parameter to make compiler happy
-  (void)Thread;
+  	(void)Thread;
 
 	//pointer arithmetic to make sure game_button_sate Buttons[] == game_button_state
 	Assert((&Input->Controllers[0].Error - &Input->Controllers[0].Buttons[0]) == (ArrayCount(Input->Controllers[0].Buttons)));
@@ -163,8 +163,8 @@ RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
 //has to be a fast function, no more than 1ms!
 //todo reduce pressure on function performance by measuring it or asking about it
 extern "C" GAME_GET_SOUND_SAMPLES(GameGetSoundSamples){
-  //Void unused parameter to make compiler happy
-  (void)Thread;
+  	//Void unused parameter to make compiler happy
+  	(void)Thread;
 
 	game_state *GameState = (game_state *)Memory->PermanentStorage;
 	GameOutputSound(GameState, SoundBuffer, 256);
