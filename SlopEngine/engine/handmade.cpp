@@ -11,7 +11,7 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 
 	for (int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex){
 //sound flag for debug sound
-#if 1	
+#if 0	
 			real32 SineValue = sinf(GameState->tSine);
 			int16 SampleValue = (int16)(SineValue * ToneVolume);
 			*SampleOut++ = SampleValue;
@@ -178,7 +178,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 
 
 //screen clear call
-DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height, 0x00FF00FF);
+DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height, 0x4173BFFF);
 uint32 color = 0xFFFFFFFF;
 #if 0 //Entity spawning and moving
 for (int i = 0; i < MAX_ENTITIES/10; ++i){
@@ -212,7 +212,7 @@ for(int i = 0; i < GameState->EntityCount; ++i)
 GameState->timer += timedelta;
 real32 move_cyan_block_value = 0.0f;
 move_cyan_block_value = GameState->timer*3;
-DrawRectangle(Buffer, 10.0f*move_cyan_block_value, 10.0f*move_cyan_block_value, 300.0f+10.0f*move_cyan_block_value, 300.0f+10.0f*move_cyan_block_value, 0x0000FFFF);
+DrawRectangle(Buffer, 10.0f*move_cyan_block_value, 10.0f*move_cyan_block_value, 300.0f+10.0f*move_cyan_block_value, 300.0f+10.0f*move_cyan_block_value, 0xBF4E41FF);
 RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
    /*old render + mouse input showcase code*/
 #if 0
