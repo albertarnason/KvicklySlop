@@ -9,7 +9,7 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 
 	for (int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex){
 //sound flag for debug sound
-#if 0	
+#if 0
 			real32 SineValue = sinf(GameState->tSine);
 			int16 SampleValue = (int16)(SineValue * ToneVolume);
 			*SampleOut++ = SampleValue;
@@ -140,7 +140,7 @@ DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height,
 DrawRectangle(Buffer, -10.0f, 10.0f, 300.0f, 300.0f, 0x0000FFFF);
 
    /*old render + mouse input showcase code*/
-#if 0
+#if 1
     RenderWeirdGradient(Buffer, GameState->XOffset, GameState->YOffset);
 	RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
 	

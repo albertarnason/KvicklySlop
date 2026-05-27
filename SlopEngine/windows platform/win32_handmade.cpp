@@ -28,6 +28,7 @@
 #include <Xinput.h>
 #include <dsound.h>
 #include <winioctl.h>
+#include "include/glad/glad.h"
 
 struct win32_offscreen_buffer
 {
@@ -920,6 +921,27 @@ WS_EX_TOPMOST
 		if(Window)
 		{
 			HDC DeviceContext = GetDC(Window);
+			
+			//we want a window, openGL supp, doublebuffering, RGBA color, 32 bit color
+			PIXELFORMATDESCRIPTOR PixelFormatDescriptor = {};
+			PixelFormatDescriptor.nSize = sizeof(PixelFormatDescriptor);
+			PixelFormatDescriptor.nVersion = 1;
+			PixelFormatDescriptor.dwFlags = PFD_DRAW_TO_WINDOW|PFD_SUPPORT_OPENGL|PFD_DOUBLEBUFFER;
+			PixelFormatDescriptor.iPixelType = PFD_TYPE_RGBA;
+			PixelFormatDescriptor.cColorBits = 32;
+			PixelFormatDescriptor.cAlphaBits = 8;
+			PixelFormatDescriptor.iLayerType = PFD_MAIN_PLANE;
+			
+			//given the context, whats the best suggested pixel format?
+			int SuggestedPixelFormatIndex = ChoosePixelFormat(DeviceContext, &PixelFormatDescriptor);
+			//use that format for our window
+			SetPixelFormat(DeviceContext, SuggestedPixelFormatIndex, &PixelFormatDescriptor);
+			
+			//Establish openGL Context, telling it what window its drawing to
+			HGLRC OpenGLRC = wglCreateContext(DeviceContext);
+			wglMakeCurrent(DeviceContext, OpenGLRC);
+			gladLoadGL();
+			
 			//todo how to query this on windows, VSYNC?
 			//hz = cycles per sec == frames per second
 				int monitor_refresh_hz = 60;
@@ -1284,6 +1306,12 @@ LPVOID BaseAdress = 0;
 #endif
 #endif
 						Win32DisplayBufferInWindow(&GlobalBackBuffer,DeviceContext, Dimension.Width, Dimension.Height);
+						//Actual openGL instructions 
+						//Set state
+						glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+						//use state
+						glClear(GL_COLOR_BUFFER_BIT);
+						SwapBuffers(DeviceContext);
 					
 						FlipWallClock = Win32GetWallClock();
 						
