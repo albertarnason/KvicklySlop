@@ -188,6 +188,7 @@ typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
 struct entity{
     real32 X;
     real32 Y;
+    real32 Z;
     real32 Width;
     real32 Height;
     uint32 Color;
@@ -208,6 +209,12 @@ struct temporary_memory{
     size_t Used;
 };
 
+struct coordinate{
+	real32 x;
+	real32 y;
+    real32 z;
+};
+
 
 #define MAX_ENTITIES 1024
 
@@ -216,7 +223,7 @@ struct game_state{
     entity Entities[MAX_ENTITIES];
 
     real32 timer;
-
+    coordinate coordinates;
     //note below is only for debug showcases, not important!
     int XOffset;
     int YOffset;
@@ -227,6 +234,7 @@ struct game_state{
     real32 jumptimer;
     memory_arena Arena;
 };
+
 
 //only for gamelayer atm
 #define PushArray(arena, type, count) (type *)ArenaPush((arena), sizeof(type)*(count))

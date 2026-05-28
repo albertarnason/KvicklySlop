@@ -77,7 +77,7 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, real32 real_min_X, re
 	int32 max_Y = RoundReal32ToInt32(real_max_Y);
 	if (min_X < 0){min_X = 0;}
 	if (min_Y < 0){min_Y = 0;}
-	if (max_X > Buffer->Width) {max_Y = Buffer->Width ;}
+	if (max_X > Buffer->Width) {max_X = Buffer->Width ;}
 	if (max_Y > Buffer->Height){max_Y = Buffer->Height;}
 	
 
@@ -91,6 +91,31 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, real32 real_min_X, re
 		row += Buffer->Pitch;
 	}
 }
+
+internal void DrawCenteredBox(game_offscreen_buffer *Buffer, real32 x, real32 y, real32 size, uint32 color){
+
+real32 min_X = x - (size/2);
+real32 min_Y = y - (size/2); 
+real32 max_X = x + (size/2); 
+real32 max_Y = y + (size/2);
+	DrawRectangle(Buffer, min_X, min_Y, max_X, max_Y, color);
+}
+
+internal void DrawCenteredBoxCoordinate(game_offscreen_buffer *Buffer, coordinate p, real32 size, uint32 color){
+	DrawCenteredBox(Buffer, p.x, p.y, size, color);
+}
+
+//stupid claude way to draw line
+internal void DrawLine(game_offscreen_buffer *Buffer, coordinate a, coordinate b, uint32 color){
+    int steps = 1000;
+    for(int s = 0; s <= steps; ++s){
+        real32 t = (real32)s / (real32)steps;
+        real32 x = a.x + t * (b.x - a.x);
+        real32 y = a.y + t * (b.y - a.y);
+        DrawRectangle(Buffer, x, y, x + 2.0f, y + 2.0f, color);
+    }
+}
+
 
 internal void SpawnEntity(game_state *GameState, real32 X, real32 Y, uint32 color){
 		entity *E = &GameState->Entities[GameState->EntityCount++];
@@ -133,6 +158,35 @@ internal void *ArenaPushZero(memory_arena *Arena, size_t Size)
     return Result;
 }
 
+internal coordinate screen(coordinate coordinate_not_norm, int width, int height){
+ 
+coordinate normalised = {};
+	
+ 	normalised.x = ((coordinate_not_norm.x + 1)/2)*(real32)width;
+	normalised.y = (1 - (coordinate_not_norm.y + 1)/2)*(real32)height;
+	normalised.z = coordinate_not_norm.z;
+return normalised;
+}
+
+internal coordinate project(real32 x, real32 y, real32 z){
+	coordinate projection = {};
+	projection.x = x/z;
+	projection.y = y/z;
+	return projection;
+}
+
+internal coordinate rotate(real32 x, real32 y, real32 z, real32 angle){
+	coordinate result = {};
+	
+	sinf(angle); 
+	cosf(angle); 
+	result.x = (x * cosf(angle)) - (z * sinf(angle));
+	result.y = y;
+	result.z = (x * sinf(angle)) + (z * cosf(angle));
+	return result;
+
+}
+
 //extern "C" is to avoid c++ name mangling for DLL purposes
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	
@@ -147,11 +201,22 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		
 		GameState->Arena.Size = Memory->TransientStorageSize;
 		GameState->Arena.Base = (uint8 *)Memory->TransientStorage;
-		GameState->Arena.Used = 0;
-				
-		SpawnEntity(GameState, (real32)10, (real32)10, 0xFFFFFFFF);
+		GameState->Arena.Used = 0;		
+		GameState->Entities[0].X =  0.5f; GameState->Entities[0].Y =  0.5f; GameState->Entities[0].Z =  0.5f;
+		GameState->Entities[1].X = -0.5f; GameState->Entities[1].Y =  0.5f; GameState->Entities[1].Z =  0.5f;
+		GameState->Entities[2].X =  0.5f; GameState->Entities[2].Y = -0.5f; GameState->Entities[2].Z =  0.5f;
+		GameState->Entities[3].X = -0.5f; GameState->Entities[3].Y = -0.5f; GameState->Entities[3].Z =  0.5f;
+		GameState->Entities[4].X =  0.5f; GameState->Entities[4].Y =  0.5f; GameState->Entities[4].Z = -0.5f;
+		GameState->Entities[5].X = -0.5f; GameState->Entities[5].Y =  0.5f; GameState->Entities[5].Z = -0.5f;
+		GameState->Entities[6].X =  0.5f; GameState->Entities[6].Y = -0.5f; GameState->Entities[6].Z = -0.5f;
+		GameState->Entities[7].X = -0.5f; GameState->Entities[7].Y = -0.5f; GameState->Entities[7].Z = -0.5f;
+		GameState->EntityCount = 8;
+
+		//SpawnEntity(GameState, (real32)10, (real32)10, 0xFFFFFFFF);
 
 		Memory->IsInitialized = true;
+
+	
 		
 	};
 	temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
@@ -177,10 +242,69 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	printf("%f\n", timedelta);
 
 
-//screen clear call
-DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height, 0x4173BFFF);
-uint32 color = 0xFFFFFFFF;
+//COLOR FORMAT IS 0xAARRGGBB (something something little endian windows something something)
+
+uint32 background_color = 0x4173BFFF;
+uint32 box_color = 0x0090EE90;
+real32 point_size = 20.0f;
+real32 offset = 50.0f;
+
+//screen clear call/background
+DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height, background_color);
+
+
+
+
+GameState->timer += timedelta;
+real32 size = 20.0f;
+coordinate p2 = {};
+coordinate p3 = {};
+coordinate p4 = {};
+real32 angle = 0;
+real32 camera_z = 3.0f;
+coordinate screen_points[8] = {};
+int screen_count = 0;
+
+for (int i = 0; i < GameState->EntityCount; ++i){
+
+	angle += 2*Pi32*GameState->timer;
+	coordinate rotated = rotate(GameState->Entities[i].X, GameState->Entities[i].Y, GameState->Entities[i].Z, GameState->timer);
+	
+	p2 = project(rotated.x, rotated.y, rotated.z + camera_z);
+	p3 = screen(p2, Buffer->Width, Buffer->Height);
+	
+	screen_points[screen_count++] = p3;
+//	DrawCenteredBoxCoordinate(Buffer, p3, size, box_color);
+}
+
+// draw lines between front face (0-3) and back face (4-7)
+// front face edges
+DrawLine(Buffer, screen_points[0], screen_points[1], box_color);
+DrawLine(Buffer, screen_points[1], screen_points[3], box_color);
+DrawLine(Buffer, screen_points[3], screen_points[2], box_color);
+DrawLine(Buffer, screen_points[2], screen_points[0], box_color);
+// back face edges
+DrawLine(Buffer, screen_points[4], screen_points[5], box_color);
+DrawLine(Buffer, screen_points[5], screen_points[7], box_color);
+DrawLine(Buffer, screen_points[7], screen_points[6], box_color);
+DrawLine(Buffer, screen_points[6], screen_points[4], box_color);
+// connecting edges
+DrawLine(Buffer, screen_points[0], screen_points[4], box_color);
+DrawLine(Buffer, screen_points[1], screen_points[5], box_color);
+DrawLine(Buffer, screen_points[2], screen_points[6], box_color);
+DrawLine(Buffer, screen_points[3], screen_points[7], box_color);
+
+/*
+
+real32 middle_x = 20.0f;
+real32 middle_y = 20.0f;
+DrawCenteredBox(Buffer, middle_x, middle_y, size, box_color);
+DrawRectangle(Buffer, offset, offset, point_size+offset, point_size+offset, box_color);
+
+*/
+
 #if 0 //Entity spawning and moving
+uint32 color = 0xFFFFFFFF;
 for (int i = 0; i < MAX_ENTITIES/10; ++i){
 	if (i > 0){
 		color = color * i;
@@ -209,14 +333,13 @@ for(int i = 0; i < GameState->EntityCount; ++i)
 
 
 
-GameState->timer += timedelta;
+#if 0
 real32 move_cyan_block_value = 0.0f;
 move_cyan_block_value = GameState->timer*3;
 DrawRectangle(Buffer, 10.0f*move_cyan_block_value, 10.0f*move_cyan_block_value, 300.0f+10.0f*move_cyan_block_value, 300.0f+10.0f*move_cyan_block_value, 0xBF4E41FF);
 RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
-   /*old render + mouse input showcase code*/
-#if 0
-    RenderWeirdGradient(Buffer, GameState->XOffset, GameState->YOffset);
+
+RenderWeirdGradient(Buffer, GameState->XOffset, GameState->YOffset);
 	RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
 	
 	for(int button_index = 0; button_index < ArrayCount(Input->MouseButtons); ++button_index){
