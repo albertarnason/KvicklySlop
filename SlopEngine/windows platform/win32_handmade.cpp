@@ -860,10 +860,13 @@ int CALLBACK WinMain(
 	LPSTR     CommandLine,
 	int       ShowCode){
 	
+
+	//Simple windows console for printf() statements in engine layer to work, in platform layer use outputdebugstring
+#if 0
 	AllocConsole();
 	FILE *f;
 	freopen_s(&f, "CONOUT$", "w", stdout);
-
+#endif
 	win32_state Win32State = {};
 
 	Win32GetEXEFileName(&Win32State);
