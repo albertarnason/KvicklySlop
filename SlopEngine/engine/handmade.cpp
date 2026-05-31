@@ -178,7 +178,7 @@ internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordi
         real32 slope   = delta_y / delta_x;
 
         // step along x, blend two pixels per column based on fractional y distance
-        for(int step = 0; step < RoundReal32ToInt32(delta_x); ++step){
+        for(int step = 0; step < (int32)delta_x; ++step){
             real32 current_x             = start_x + (real32)step;
             real32 current_y             = start_y + (real32)step * slope;
             int32  pixel_x               = RoundReal32ToInt32(current_x);
@@ -207,7 +207,7 @@ internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordi
         real32 slope   = delta_x / delta_y;
 
         // step along y, blend two pixels per row based on fractional x distance
-        for(int step = 0; step < RoundReal32ToInt32(delta_y); ++step){
+        for(int step = 0; step < (int32)delta_y; ++step){
             real32 current_x             = start_x + (real32)step * slope;
             real32 current_y             = start_y + (real32)step;
             int32  pixel_x               = RoundReal32ToInt32(current_x);
