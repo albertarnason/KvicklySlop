@@ -44,23 +44,6 @@ internal void RenderPlayer(game_offscreen_buffer *Buffer, int PlayerX, int Playe
 	}
 }
 
-/* internal void RenderWeirdGradient(game_offscreen_buffer *Buffer, int BlueOffset, int GreenOffset)
-{
-	uint8 *Row = (uint8 *)Buffer->Memory;
-
-	for(int Y = 0; Y < Buffer->Height;++Y)
-	{
-		uint32 *Pixel = (uint32 *)Row;
-		for(int X = 0; X <Buffer->Width;++X)
-		{
-			uint8 Blue = (uint8)(X + BlueOffset);
-			uint8 Green= (uint8)(Y + GreenOffset);
-			*Pixel++ = ((Green << 16) | Blue);
-		}
-		Row += Buffer->Pitch;
-	}
-} */
-
 //default C casting will truncate instead of rounding
 internal int32 RoundReal32ToInt32 (real32 Real32){
 	int32 Result = (int32)(Real32 + 0.5f);
