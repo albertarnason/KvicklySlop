@@ -158,6 +158,12 @@ internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordi
     real32 end_x   = point_b.x;
     real32 end_y   = point_b.y;
 
+	// degenerate case — draw single pixel and early out
+    if(start_x == end_x && start_y == end_y){
+        DrawPixel(buffer, RoundReal32ToInt32(start_x), RoundReal32ToInt32(start_y), ColorWithAlpha(color, 1.0f));
+        return;
+    }
+
     // select horizontal or vertical stepping based on dominant axis
     if(fabsf(end_y - start_y) < fabsf(end_x - start_x)){
 
