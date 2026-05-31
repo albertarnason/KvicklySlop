@@ -104,7 +104,7 @@ internal void DrawCenteredBoxCoordinate(game_offscreen_buffer *Buffer, coordinat
 }
 
 //stupid claude way to draw line
-internal void DrawLine(game_offscreen_buffer *Buffer, coordinate a, coordinate b, uint32 color){
+internal void DrawLine_old(game_offscreen_buffer *Buffer, coordinate a, coordinate b, uint32 color){
     int steps = 1000;
     for(int s = 0; s <= steps; ++s){
         real32 t = (real32)s / (real32)steps;
@@ -112,6 +112,109 @@ internal void DrawLine(game_offscreen_buffer *Buffer, coordinate a, coordinate b
         real32 y = a.y + t * (b.y - a.y);
         DrawRectangle(Buffer, x, y, x + 2.0f, y + 2.0f, color);
     }
+}
+
+uint32 ColorWithAlpha(uint32 color, real32 alpha_0_to_1){
+    uint8  alpha     = (uint8)(alpha_0_to_1 * 255.0f);
+    uint32 new_color = (color & 0x00FFFFFF) | ((uint32)alpha << 24);
+    return new_color;
+}
+
+//manual alpha
+internal uint32 BlendPixel(uint32 src, uint32 dst){
+    real32 alpha = (real32)((src >> 24) & 0xFF) / 255.0f;
+
+    uint8 src_r = (src >> 16) & 0xFF;
+    uint8 src_g = (src >>  8) & 0xFF;
+    uint8 src_b = (src >>  0) & 0xFF;
+
+    uint8 dst_r = (dst >> 16) & 0xFF;
+    uint8 dst_g = (dst >>  8) & 0xFF;
+    uint8 dst_b = (dst >>  0) & 0xFF;
+
+    uint8 out_r = (uint8)(src_r * alpha + dst_r * (1.0f - alpha));
+    uint8 out_g = (uint8)(src_g * alpha + dst_g * (1.0f - alpha));
+    uint8 out_b = (uint8)(src_b * alpha + dst_b * (1.0f - alpha));
+
+    return (out_r << 16) | (out_g << 8) | out_b;
+}
+
+internal void DrawPixel(game_offscreen_buffer *Buffer, int32 X, int32 Y, uint32 color){
+    if(X < 0 || X >= Buffer->Width)  { return; }
+    if(Y < 0 || Y >= Buffer->Height) { return; }
+
+    uint32 *pixel = (uint32 *)((uint8 *)Buffer->Memory + X*Buffer->BytesPerPixel + Y*Buffer->Pitch);
+    *pixel = BlendPixel(color, *pixel);
+}
+
+//Xiaolin Wu's line algorithm
+internal void DrawLine(game_offscreen_buffer *Buffer, coordinate a, coordinate b, uint32 color){
+	real32 x0 = a.x;
+	real32 y0 = a.y;
+	real32 x1 = b.x;
+	real32 y1 = b.y;
+	real32 delta_x;
+	real32 delta_y;
+	real32 m;
+	real32 x;
+	real32 y;
+	int32 x_int32;
+	int32 y_int32;
+	real32 fractional_distance;
+	
+
+	//Horizontal line
+	if (fabsf(y1 - y0) < fabsf(x1 - x0)){
+		if(x1 < x0){
+			x0 = b.x;
+			x1 = a.x;
+			y0 = b.y;
+    		y1 = a.y;
+		}
+
+		//find difference between point a and b
+		delta_x = x1 - x0;
+		delta_y = y1 - y0;
+
+		m = delta_y / delta_x;
+		for (int i = 0; i <= RoundReal32ToInt32(delta_x); ++i){
+			x = x0 + i;
+			y = y0 + ((real32)i * m);
+			x_int32 = RoundReal32ToInt32(x);
+			y_int32 = RoundReal32ToInt32(y);
+			fractional_distance = fabsf(y - (real32)y_int32);
+			DrawPixel(Buffer, x_int32, y_int32,     ColorWithAlpha(color, 1.0f - fractional_distance));
+			
+			DrawPixel(Buffer, x_int32, y_int32 + 1, ColorWithAlpha(color,        fractional_distance));
+		}
+	}
+	//Vertical line
+	else{
+		if(y1 < y0){
+			x0 = b.x;
+			x1 = a.x;
+			y0 = b.y;
+			y1 = a.y;
+		}
+		//find difference between point a and b
+		delta_x = x1 - x0;
+		delta_y = y1 - y0;
+
+		m = delta_x / delta_y;
+		for (int i = 0; i < RoundReal32ToInt32(delta_y); ++i){
+			x = x0 + ((real32)i * m);
+			y = y0 + i;
+			x_int32 = RoundReal32ToInt32(x);
+			y_int32 = RoundReal32ToInt32(y);
+			fractional_distance = fabsf(x - (real32)x_int32);
+			DrawPixel(Buffer, x_int32,      y_int32,  ColorWithAlpha(color, 1.0f - fractional_distance));
+			
+			DrawPixel(Buffer, x_int32  + 1, y_int32, ColorWithAlpha(color,        fractional_distance));
+		}
+
+	}
+
+
 }
 
 
