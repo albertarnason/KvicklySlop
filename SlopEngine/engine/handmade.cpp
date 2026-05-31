@@ -160,8 +160,8 @@ internal coordinate screen(coordinate coordinate_not_norm, int width, int height
  
 coordinate normalised = {};
 	
- 	normalised.x = ((coordinate_not_norm.x + 1)/2)*(real32)width;
-	normalised.y = (1 - (coordinate_not_norm.y + 1)/2)*(real32)height;
+ 	normalised.x = ((coordinate_not_norm.x + 1)/2)*(real32)width  - 0.5f;
+	normalised.y = (1 - (coordinate_not_norm.y + 1)/2)*(real32)height - 0.5f;
 	normalised.z = coordinate_not_norm.z;
 return normalised;
 }
