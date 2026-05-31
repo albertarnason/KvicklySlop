@@ -44,7 +44,7 @@ internal void RenderPlayer(game_offscreen_buffer *Buffer, int PlayerX, int Playe
 	}
 }
 
-internal void RenderWeirdGradient(game_offscreen_buffer *Buffer, int BlueOffset, int GreenOffset)
+/* internal void RenderWeirdGradient(game_offscreen_buffer *Buffer, int BlueOffset, int GreenOffset)
 {
 	uint8 *Row = (uint8 *)Buffer->Memory;
 
@@ -59,7 +59,7 @@ internal void RenderWeirdGradient(game_offscreen_buffer *Buffer, int BlueOffset,
 		}
 		Row += Buffer->Pitch;
 	}
-}
+} */
 
 //default C casting will truncate instead of rounding
 internal int32 RoundReal32ToInt32 (real32 Real32){
@@ -186,7 +186,9 @@ internal coordinate rotate(real32 x, real32 y, real32 z, real32 angle){
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
-	
+	//Void unused parameter to make compiler happy
+  	(void)Thread;
+
 	//pointer arithmetic to make sure game_button_sate Buttons[] == game_button_state
 	Assert((&Input->Controllers[0].Error - &Input->Controllers[0].Buttons[0]) == (ArrayCount(Input->Controllers[0].Buttons)));
 	//game breaks right here in debugger if false
@@ -302,6 +304,9 @@ EndTemporaryMemory(temp_memory);
 //has to be a fast function, no more than 1ms!
 //todo reduce pressure on function performance by measuring it or asking about it
 extern "C" GAME_GET_SOUND_SAMPLES(GameGetSoundSamples){
+  	//Void unused parameter to make compiler happy
+  	(void)Thread;
+
 	game_state *GameState = (game_state *)Memory->PermanentStorage;
 	GameOutputSound(GameState, SoundBuffer, 256);
 }
