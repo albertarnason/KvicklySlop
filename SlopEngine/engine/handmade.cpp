@@ -32,8 +32,8 @@ internal void RenderPlayer(game_offscreen_buffer *Buffer, int PlayerX, int Playe
 	uint8 *EndOfBuffer = (uint8 *)Buffer->Memory + Buffer->Pitch*Buffer->Height;
 	uint32 color = 0xFF0000FF;
 	int top = PlayerY;
-	int bottom = PlayerY+100;
-	for(int X = PlayerX; X < PlayerX+100; ++X){
+	int bottom = PlayerY+10;
+	for(int X = PlayerX; X < PlayerX+10; ++X){
 		uint8 *pixel = ((uint8 *)Buffer->Memory + X*Buffer->BytesPerPixel + top*Buffer->Pitch);
 		for (int Y = top; Y < bottom; ++Y){
 			if((pixel >= Buffer->Memory) && ((pixel+4) <= EndOfBuffer)){
@@ -80,8 +80,6 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, real32 real_min_X, re
 	if (max_X > Buffer->Width) {max_X = Buffer->Width ;}
 	if (max_Y > Buffer->Height){max_Y = Buffer->Height;}
 	
-
-
 	uint8 *row = ((uint8 *)Buffer->Memory +min_X*Buffer->BytesPerPixel + min_Y*Buffer->Pitch);
 	for (int Y = min_Y; Y < max_Y; ++Y){
 		uint32 *pixel = (uint32 *)row;
@@ -187,7 +185,6 @@ internal coordinate rotate(real32 x, real32 y, real32 z, real32 angle){
 
 }
 
-//extern "C" is to avoid c++ name mangling for DLL purposes
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	
 	//pointer arithmetic to make sure game_button_sate Buttons[] == game_button_state
@@ -197,8 +194,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	
 	game_state *GameState = (game_state *)Memory->PermanentStorage;
 	if(!Memory->IsInitialized){
-		// arena allocation
-		
+		/*Persistent across frame memory initialisation*/
 		GameState->Arena.Size = Memory->TransientStorageSize;
 		GameState->Arena.Base = (uint8 *)Memory->TransientStorage;
 		GameState->Arena.Used = 0;		
@@ -212,17 +208,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		GameState->Entities[7].X = -0.5f; GameState->Entities[7].Y = -0.5f; GameState->Entities[7].Z = -0.5f;
 		GameState->EntityCount = 8;
 
-		//SpawnEntity(GameState, (real32)10, (real32)10, 0xFFFFFFFF);
-
 		Memory->IsInitialized = true;
-
-	
-		
 	};
-	temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
-	
+temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
 
-	//For loop for multiple controller inputs hmm
+	//For loop for multiple controller
 	for(int ControllerIndex = 0; ControllerIndex <ArrayCount(Input->Controllers); ++ControllerIndex){
 		game_controller_input *Controller = GetController(Input, ControllerIndex);
 		if(Controller->Analog){
@@ -232,123 +222,79 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 			if(Controller->MoveRight  .EndedDown){GameState->PlayerX += 10;}
 			if(Controller->MoveUp     .EndedDown){GameState->PlayerY -= 10;}
 			if(Controller->MoveDown   .EndedDown){GameState->PlayerY += 10;}
-			
-			
-			
 		}
 		
 	}
+
 	real32 timedelta = Input->dtForFrame;
-	printf("%f\n", timedelta);
-
-
-//COLOR FORMAT IS 0xAARRGGBB (something something little endian windows something something)
-
-uint32 background_color = 0x4173BFFF;
-uint32 box_color = 0x0090EE90;
-real32 point_size = 20.0f;
-real32 offset = 50.0f;
-
-//screen clear call/background
-DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height, background_color);
-
-
-
-
-GameState->timer += timedelta;
-real32 size = 20.0f;
-coordinate p2 = {};
-coordinate p3 = {};
-coordinate p4 = {};
-real32 angle = 0;
-real32 camera_z = 3.0f;
-coordinate screen_points[8] = {};
-int screen_count = 0;
-
-for (int i = 0; i < GameState->EntityCount; ++i){
-
-	angle += 2*Pi32*GameState->timer;
-	coordinate rotated = rotate(GameState->Entities[i].X, GameState->Entities[i].Y, GameState->Entities[i].Z, GameState->timer);
+	GameState->timer += timedelta;
 	
-	p2 = project(rotated.x, rotated.y, rotated.z + camera_z);
-	p3 = screen(p2, Buffer->Width, Buffer->Height);
+	//COLOR FORMAT IS 0xAARRGGBB (something something little endian windows something something)
+	uint32 background_color = 0x4173BFFF;
+	uint32 box_color = 0x0090EE90;
+	real32 point_size = 20.0f;
+	real32 offset = 50.0f;
 	
-	screen_points[screen_count++] = p3;
-//	DrawCenteredBoxCoordinate(Buffer, p3, size, box_color);
-}
+	//screen clear call/background
+	DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height, background_color);
+	real32 size = 20.0f;
+	coordinate p2 = {};
+	coordinate p3 = {};
+	real32 angle = 0;
+	real32 camera_z = 3.0f;
+	coordinate screen_points[8] = {};
+	int screen_count = 0;
 
-// draw lines between front face (0-3) and back face (4-7)
-// front face edges
-DrawLine(Buffer, screen_points[0], screen_points[1], box_color);
-DrawLine(Buffer, screen_points[1], screen_points[3], box_color);
-DrawLine(Buffer, screen_points[3], screen_points[2], box_color);
-DrawLine(Buffer, screen_points[2], screen_points[0], box_color);
-// back face edges
-DrawLine(Buffer, screen_points[4], screen_points[5], box_color);
-DrawLine(Buffer, screen_points[5], screen_points[7], box_color);
-DrawLine(Buffer, screen_points[7], screen_points[6], box_color);
-DrawLine(Buffer, screen_points[6], screen_points[4], box_color);
-// connecting edges
-DrawLine(Buffer, screen_points[0], screen_points[4], box_color);
-DrawLine(Buffer, screen_points[1], screen_points[5], box_color);
-DrawLine(Buffer, screen_points[2], screen_points[6], box_color);
-DrawLine(Buffer, screen_points[3], screen_points[7], box_color);
+	for (int i = 0; i < GameState->EntityCount; ++i){
 
-/*
-
-real32 middle_x = 20.0f;
-real32 middle_y = 20.0f;
-DrawCenteredBox(Buffer, middle_x, middle_y, size, box_color);
-DrawRectangle(Buffer, offset, offset, point_size+offset, point_size+offset, box_color);
-
-*/
-
-#if 0 //Entity spawning and moving
-uint32 color = 0xFFFFFFFF;
-for (int i = 0; i < MAX_ENTITIES/10; ++i){
-	if (i > 0){
-		color = color * i;
+		angle += 2*Pi32*GameState->timer;
+		coordinate rotated = rotate(GameState->Entities[i].X, GameState->Entities[i].Y, GameState->Entities[i].Z, GameState->timer);
+		
+		p2 = project(rotated.x, rotated.y, rotated.z + camera_z);
+		p3 = screen(p2, Buffer->Width, Buffer->Height);
+		
+		screen_points[screen_count++] = p3;
+	//	DrawCenteredBoxCoordinate(Buffer, p3, size, box_color);
 	}
- SpawnEntity(GameState, (real32)10+(i*4),(real32)10+(i*4), color);
-}
 
-for(int i = 0; i < GameState->EntityCount; ++i)
-{
-	
-    entity *Entity = &GameState->Entities[i];
+	// draw lines between front face (0-3) and back face (4-7)
+	// front face edges
+	DrawLine(Buffer, screen_points[0], screen_points[1], box_color);
+	DrawLine(Buffer, screen_points[1], screen_points[3], box_color);
+	DrawLine(Buffer, screen_points[3], screen_points[2], box_color);
+	DrawLine(Buffer, screen_points[2], screen_points[0], box_color);
+	// back face edges
+	DrawLine(Buffer, screen_points[4], screen_points[5], box_color);
+	DrawLine(Buffer, screen_points[5], screen_points[7], box_color);
+	DrawLine(Buffer, screen_points[7], screen_points[6], box_color);
+	DrawLine(Buffer, screen_points[6], screen_points[4], box_color);
+	// connecting edges
+	DrawLine(Buffer, screen_points[0], screen_points[4], box_color);
+	DrawLine(Buffer, screen_points[1], screen_points[5], box_color);
+	DrawLine(Buffer, screen_points[2], screen_points[6], box_color);
+	DrawLine(Buffer, screen_points[3], screen_points[7], box_color);
 
-	
-    if(!Entity->IsActive) continue;
-
-    Entity->X += Entity->VelocityX * Input->dtForFrame;
-    Entity->Y += Entity->VelocityY * Input->dtForFrame;
-
-    DrawRectangle(Buffer, Entity->X, Entity->Y, 
-                  Entity->X + Entity->Width, 
-                  Entity->Y + Entity->Height, 
-                  Entity->Color);
-}
-#endif
-
-
-
-
-#if 0
-real32 move_cyan_block_value = 0.0f;
-move_cyan_block_value = GameState->timer*3;
-DrawRectangle(Buffer, 10.0f*move_cyan_block_value, 10.0f*move_cyan_block_value, 300.0f+10.0f*move_cyan_block_value, 300.0f+10.0f*move_cyan_block_value, 0xBF4E41FF);
-RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
-
-RenderWeirdGradient(Buffer, GameState->XOffset, GameState->YOffset);
 	RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
-	
-	for(int button_index = 0; button_index < ArrayCount(Input->MouseButtons); ++button_index){
-		if(Input->MouseButtons[button_index].EndedDown){
-			RenderPlayer(Buffer, 10 + 20*button_index, 10);
-		}
-	}
-#endif
-	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 EndTemporaryMemory(temp_memory);
 }
