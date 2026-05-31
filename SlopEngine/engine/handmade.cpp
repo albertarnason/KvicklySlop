@@ -169,8 +169,12 @@ internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordi
 
         // ensure left to right ordering
         if(end_x < start_x){
-            real32 temp_x = start_x; start_x = end_x; end_x = temp_x;
-            real32 temp_y = start_y; start_y = end_y; end_y = temp_y;
+            real32 temp_x = start_x; 
+            real32 temp_y = start_y; 
+			start_x = end_x; 
+			start_y = end_y;
+			end_x = temp_x;
+			end_y = temp_y;
         }
 
         real32 delta_x = end_x - start_x;
@@ -198,8 +202,12 @@ internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordi
 
         // ensure top to bottom ordering
         if(end_y < start_y){
-            real32 temp_x = start_x; start_x = end_x; end_x = temp_x;
-            real32 temp_y = start_y; start_y = end_y; end_y = temp_y;
+            real32 temp_x = start_x; 
+            real32 temp_y = start_y; 
+			start_x = end_x; 
+			start_y = end_y; 
+			end_x = temp_x;
+			end_y = temp_y;
         }
 
         real32 delta_x = end_x - start_x;
