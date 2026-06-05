@@ -44,23 +44,6 @@ internal void RenderPlayer(game_offscreen_buffer *Buffer, int PlayerX, int Playe
 	}
 }
 
-/* internal void RenderWeirdGradient(game_offscreen_buffer *Buffer, int BlueOffset, int GreenOffset)
-{
-	uint8 *Row = (uint8 *)Buffer->Memory;
-
-	for(int Y = 0; Y < Buffer->Height;++Y)
-	{
-		uint32 *Pixel = (uint32 *)Row;
-		for(int X = 0; X <Buffer->Width;++X)
-		{
-			uint8 Blue = (uint8)(X + BlueOffset);
-			uint8 Green= (uint8)(Y + GreenOffset);
-			*Pixel++ = ((Green << 16) | Blue);
-		}
-		Row += Buffer->Pitch;
-	}
-} */
-
 //default C casting will truncate instead of rounding
 internal int32 RoundReal32ToInt32 (real32 Real32){
 	int32 Result = (int32)(Real32 + 0.5f);
@@ -104,7 +87,7 @@ internal void DrawCenteredBoxCoordinate(game_offscreen_buffer *Buffer, coordinat
 }
 
 //stupid claude way to draw line
-internal void DrawLine(game_offscreen_buffer *Buffer, coordinate a, coordinate b, uint32 color){
+internal void DrawLine_old(game_offscreen_buffer *Buffer, coordinate a, coordinate b, uint32 color){
     int steps = 1000;
     for(int s = 0; s <= steps; ++s){
         real32 t = (real32)s / (real32)steps;
@@ -114,6 +97,124 @@ internal void DrawLine(game_offscreen_buffer *Buffer, coordinate a, coordinate b
     }
 }
 
+uint32 ColorWithAlpha(uint32 color, real32 normalized_alpha){
+    // pack normalized float alpha into top byte of color
+    uint8  alpha_byte = (uint8)(normalized_alpha * 255.0f);
+    uint32 color_with_alpha = (color & 0x00FFFFFF) | ((uint32)alpha_byte << 24);
+    return color_with_alpha;
+}
+
+internal uint32 BlendPixel(uint32 source_color, uint32 destination_color){
+    // extract alpha from source as 0-1 float
+    real32 source_alpha = (real32)((source_color >> 24) & 0xFF) / 255.0f;
+
+    // extract rgb channels from source and destination
+    uint8 source_red   = (source_color >> 16) & 0xFF;
+    uint8 source_green = (source_color >>  8) & 0xFF;
+    uint8 source_blue  = (source_color >>  0) & 0xFF;
+
+    uint8 destination_red   = (destination_color >> 16) & 0xFF;
+    uint8 destination_green = (destination_color >>  8) & 0xFF;
+    uint8 destination_blue  = (destination_color >>  0) & 0xFF;
+
+    // linear blend source over destination
+    uint8 output_red   = (uint8)(source_red   * source_alpha + destination_red   * (1.0f - source_alpha));
+    uint8 output_green = (uint8)(source_green * source_alpha + destination_green * (1.0f - source_alpha));
+    uint8 output_blue  = (uint8)(source_blue  * source_alpha + destination_blue  * (1.0f - source_alpha));
+
+    return (output_red << 16) | (output_green << 8) | output_blue;
+}
+
+internal void DrawPixel(game_offscreen_buffer *buffer, int32 pixel_x, int32 pixel_y, uint32 color){
+    // bounds check
+    if(pixel_x < 0 || pixel_x >= buffer->Width)  { return; }
+    if(pixel_y < 0 || pixel_y >= buffer->Height) { return; }
+
+    // compute pixel address and blend into framebuffer
+    uint32 *destination_pixel = (uint32 *)((uint8 *)buffer->Memory + pixel_x*buffer->BytesPerPixel + pixel_y*buffer->Pitch);
+    *destination_pixel = BlendPixel(color, *destination_pixel);
+}
+
+internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordinate point_b, uint32 color){
+    real32 start_x = point_a.x;
+    real32 start_y = point_a.y;
+    real32 end_x   = point_b.x;
+    real32 end_y   = point_b.y;
+
+	// degenerate case — draw single pixel and early out
+    if(start_x == end_x && start_y == end_y){
+        DrawPixel(buffer, RoundReal32ToInt32(start_x), RoundReal32ToInt32(start_y), ColorWithAlpha(color, 1.0f));
+        return;
+    }
+
+    // select horizontal or vertical stepping based on dominant axis
+    if(fabsf(end_y - start_y) < fabsf(end_x - start_x)){
+
+        // ensure left to right ordering
+        if(end_x < start_x){
+            real32 temp_x = start_x; 
+            real32 temp_y = start_y; 
+			start_x = end_x; 
+			start_y = end_y;
+			end_x = temp_x;
+			end_y = temp_y;
+        }
+
+        real32 delta_x = end_x - start_x;
+        real32 delta_y = end_y - start_y;
+        real32 slope   = delta_y / delta_x;
+
+        // step along x, blend two pixels per column based on fractional y distance
+        for(int step = 0; step < (int32)delta_x; ++step){
+            real32 current_x             = start_x + (real32)step;
+            real32 current_y             = start_y + (real32)step * slope;
+            int32  pixel_x               = RoundReal32ToInt32(current_x);
+            int32  pixel_y               = RoundReal32ToInt32(current_y);
+            real32 fractional_y_distance = fabsf(current_y - (real32)pixel_y);
+
+            // neighbor pixel direction depends on slope sign
+            int32 neighbor_pixel_y;
+            if(slope >= 0){ neighbor_pixel_y = pixel_y + 1; }
+            else          { neighbor_pixel_y = pixel_y - 1; }
+
+            DrawPixel(buffer, pixel_x, pixel_y,          ColorWithAlpha(color, 1.0f - fractional_y_distance));
+            DrawPixel(buffer, pixel_x, neighbor_pixel_y, ColorWithAlpha(color,        fractional_y_distance));
+        }
+    }
+    else{
+
+        // ensure top to bottom ordering
+        if(end_y < start_y){
+            real32 temp_x = start_x; 
+            real32 temp_y = start_y; 
+			start_x = end_x; 
+			start_y = end_y; 
+			end_x = temp_x;
+			end_y = temp_y;
+        }
+
+        real32 delta_x = end_x - start_x;
+        real32 delta_y = end_y - start_y;
+        real32 slope   = delta_x / delta_y;
+
+        // step along y, blend two pixels per row based on fractional x distance
+        for(int step = 0; step < (int32)delta_y; ++step){
+            real32 current_x             = start_x + (real32)step * slope;
+            real32 current_y             = start_y + (real32)step;
+            int32  pixel_x               = RoundReal32ToInt32(current_x);
+            int32  pixel_y               = RoundReal32ToInt32(current_y);
+            real32 fractional_x_distance = fabsf(current_x - (real32)pixel_x);
+
+            // neighbor pixel direction depends on slope sign
+            int32 neighbor_pixel_x;
+            if(slope >= 0){ neighbor_pixel_x = pixel_x + 1; }
+            else          { neighbor_pixel_x = pixel_x - 1; }
+
+            DrawPixel(buffer, pixel_x,          pixel_y, ColorWithAlpha(color, 1.0f - fractional_x_distance));
+            DrawPixel(buffer, neighbor_pixel_x, pixel_y, ColorWithAlpha(color,        fractional_x_distance));
+        }
+    }
+}
 
 internal void SpawnEntity(game_state *GameState, real32 X, real32 Y, uint32 color){
 		entity *E = &GameState->Entities[GameState->EntityCount++];
@@ -160,8 +261,8 @@ internal coordinate screen(coordinate coordinate_not_norm, int width, int height
  
 coordinate normalised = {};
 	
- 	normalised.x = ((coordinate_not_norm.x + 1)/2)*(real32)width;
-	normalised.y = (1 - (coordinate_not_norm.y + 1)/2)*(real32)height;
+ 	normalised.x = ((coordinate_not_norm.x + 1)/2)*(real32)width  - 0.5f;
+	normalised.y = (1 - (coordinate_not_norm.y + 1)/2)*(real32)height - 0.5f;
 	normalised.z = coordinate_not_norm.z;
 return normalised;
 }
