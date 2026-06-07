@@ -74,11 +74,11 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, real32 real_min_X, re
 }
 
 internal void DrawCenteredBox(game_offscreen_buffer *Buffer, real32 x, real32 y, real32 size, uint32 color){
+	real32 min_X = x - (size/2);
+	real32 min_Y = y - (size/2); 
+	real32 max_X = x + (size/2); 
+	real32 max_Y = y + (size/2);
 
-real32 min_X = x - (size/2);
-real32 min_Y = y - (size/2); 
-real32 max_X = x + (size/2); 
-real32 max_Y = y + (size/2);
 	DrawRectangle(Buffer, min_X, min_Y, max_X, max_Y, color);
 }
 
@@ -321,10 +321,10 @@ temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
 		if(Controller->Analog){
 		} 
 		else {
-			if(Controller->MoveLeft   .EndedDown){GameState->PlayerX -= 10;}
-			if(Controller->MoveRight  .EndedDown){GameState->PlayerX += 10;}
-			if(Controller->MoveUp     .EndedDown){GameState->PlayerY -= 10;}
-			if(Controller->MoveDown   .EndedDown){GameState->PlayerY += 10;}
+			if(Controller->MoveLeft   .EndedDown){}
+			if(Controller->MoveRight  .EndedDown){}
+			if(Controller->MoveUp     .EndedDown){}
+			if(Controller->MoveDown   .EndedDown){}
 		}
 		
 	}

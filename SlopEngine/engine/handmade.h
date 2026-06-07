@@ -226,14 +226,12 @@ struct game_state{
 
     real32 timer;
     coordinate coordinates;
-    //note below is only for debug showcases, not important!
-    int XOffset;
-    int YOffset;
-    int ToneHz;
+
+    //only used for sound example
     real32 tSine;
-    int PlayerX;
-    int PlayerY;
-    real32 jumptimer;
+
+
+    //arena is important
     memory_arena Arena;
 };
 
