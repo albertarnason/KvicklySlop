@@ -272,8 +272,7 @@ return(Result);
 // ---------------------------------------------------------------------------
 
 internal void
-Win32GetInputFileLocation(platform_state *State, bool32 InputStream, int SlotIndex,
-						   int DestCount, char *Dest)
+Win32GetInputFileLocation(platform_state *State, bool32 InputStream, int SlotIndex, int DestCount, char *Dest)
 {
 		char Temp[64];
 	wsprintfA(Temp, "loop_edit_%d_%s.hmi", SlotIndex, InputStream ? "input" : "state");

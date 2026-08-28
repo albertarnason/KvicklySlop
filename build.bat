@@ -16,9 +16,9 @@ REM Game DLL (shared by both platform layers)
 cl %CommonCompilerFlags% /I "..\SlopEngine\engine" /I "..\SlopEngine\SDL3\include" "..\SlopEngine\engine\handmade.cpp" -Fmhandmade.map /LD /link -incremental:no /PDB:handmade.pdb -EXPORT:GameGetSoundSamples -EXPORT:GameUpdateAndRender
 
 REM Win32 platform layer (native)
-cl %CommonCompilerFlags% /I "..\SlopEngine\engine" /I "..\SlopEngine\windows platform" /I "..\SlopEngine\SDL3\include" "..\SlopEngine\windows platform\win32_handmade.cpp" -Fewin32_handmade.exe -Fmwin32_handmade.map /link %CommonLinkerFlags% /LIBPATH:"..\SlopEngine\SDL3\lib\x64" SDL3.lib
+cl %CommonCompilerFlags% /I "..\SlopEngine\engine" /I "..\SlopEngine\windows_platform" /I "..\SlopEngine\SDL3\include" "..\SlopEngine\windows platform\win32_handmade.cpp" -Fewin32_handmade.exe -Fmwin32_handmade.map /link %CommonLinkerFlags% /LIBPATH:"..\SlopEngine\SDL3\lib\x64" SDL3.lib
 
 REM SDL3 platform layer (in progress)
-cl %CommonCompilerFlags% /I "..\SlopEngine\engine" /I "..\SlopEngine\windows platform" /I "..\SlopEngine\SDL3\include" "..\SlopEngine\windows platform\sdl_win32_platform.cpp" -Fesdl_win32_platform.exe -Fmsdl_win32_platform.map /link %CommonLinkerFlags% /LIBPATH:"..\SlopEngine\SDL3\lib\x64" SDL3.lib
+cl %CommonCompilerFlags% /I "..\SlopEngine\engine" /I "..\SlopEngine\windows_platform" /I "..\SlopEngine\SDL3\include" "..\SlopEngine\windows platform\sdl_win32_platform.cpp" -Fesdl_win32_platform.exe -Fmsdl_win32_platform.map /link %CommonLinkerFlags% /LIBPATH:"..\SlopEngine\SDL3\lib\x64" SDL3.lib
 
 popd
