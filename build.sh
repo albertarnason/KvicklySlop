@@ -15,7 +15,7 @@ RELEASE_FLAGS="-O2 -DHANDMADE_INTERNAL=0 -DHANDMADE_SLOW=0"
 
 MODE="debug"
 
-if [[ "${1:-}" == "-release" ]]; then
+if [[ "${1:-}" == "-r" || "${1:-}" == "--release" ]]; then
   MODE="release"
 fi
 
