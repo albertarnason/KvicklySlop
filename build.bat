@@ -9,6 +9,9 @@ set PATH=%PATH%;%SDL3Lib%
 IF NOT EXIST build mkdir build
 pushd build
 
+REM Copy SDL3.dll next to the exe if not already there
+IF NOT EXIST SDL3.dll copy "..\SlopEngine\SDL3\lib\x64\SDl3.dll" .
+
 REM Game DLL (shared by both platform layers)
 cl %CommonCompilerFlags% /I "..\SlopEngine\engine" /I "..\SlopEngine\SDL3\include" "..\SlopEngine\engine\handmade.cpp" -Fmhandmade.map /LD /link -incremental:no /PDB:handmade.pdb -EXPORT:GameGetSoundSamples -EXPORT:GameUpdateAndRender
 
