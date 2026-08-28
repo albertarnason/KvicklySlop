@@ -333,8 +333,8 @@ temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
 	GameState->timer += timedelta;
 	
 	//COLOR FORMAT IS 0xAARRGGBB (something something little endian windows something something)
-	uint32 background_color = 0x4173BFFF;
-	uint32 box_color = 0x0090EE90;
+	uint32 background_color = 0xFF73BFFF;
+	uint32 box_color = 0xFF90EE90;
 	real32 point_size = 20.0f;
 	real32 offset = 50.0f;
 	
@@ -343,14 +343,12 @@ temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
 	real32 size = 20.0f;
 	coordinate p2 = {};
 	coordinate p3 = {};
-	real32 angle = 0;
 	real32 camera_z = 3.0f;
 	coordinate screen_points[8] = {};
 	int screen_count = 0;
 
 	for (int i = 0; i < GameState->EntityCount; ++i){
 
-		angle += 2*Pi32*GameState->timer;
 		coordinate rotated = rotate(GameState->Entities[i].X, GameState->Entities[i].Y, GameState->Entities[i].Z, GameState->timer);
 		
 		p2 = project(rotated.x, rotated.y, rotated.z + camera_z);

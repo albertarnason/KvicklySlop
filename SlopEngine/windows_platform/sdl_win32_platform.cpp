@@ -498,8 +498,7 @@ int main(int argc, char *argv[])
 	// StretchDIBits. Create once here, recreate texture on resize.
 	SDL_Renderer *Renderer = SDL_CreateRenderer(Window, 0);
 	SDL_Texture *BackBufferTexture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, window_width, window_height);
-	// Keep your existing game_offscreen_buffer.Memory as a plain malloc'd
-	// buffer that your renderer writes into untouched, then each frame:
+	SDL_SetTextureBlendMode(BackBufferTexture, SDL_BLENDMODE_NONE);
 
 
 	// NEW: audio device setup replaces Win32InitDSound. SDL3 audio is stream-
