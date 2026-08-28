@@ -352,25 +352,6 @@ internal void Win32PlaybackInput(platform_state *State, game_input *input_to_pla
 	}
 }
 
-
-
-// Scheduler granularity (Windows-only, no Linux equivalent needed)
-internal bool32
-Win32SetSchedulerGranularity(void)
-{
-	UINT DesiredSchedulerMS = 1;
-	bool32 SleepIsGranular = (timeBeginPeriod(DesiredSchedulerMS) == TIMERR_NOERROR);
-	return SleepIsGranular;
-}
-
-internal void
-Win32ClearSchedulerGranularity(void)
-{
-	timeEndPeriod(1);
-}
-
-
-// Scheduler granularity (Windows-only, no Linux equivalent needed)
 #if HANDMADE_INTERNAL
 internal void
 Win32AllocDebugConsole(void)
@@ -443,16 +424,6 @@ PlatformProcessPendingEvents(platform_state *State, game_controller_input *Keybo
 	}
 }
 
-
-
-// ---------------------------------------------------------------------------
-// Main entry point
-// PORT: this replaces WinMain. Keep it as a normal main() (SDL3 does not
-// require WinMain, and SDL_main handles the Windows subsystem entry point
-// for you if you #include <SDL3/SDL_main.h> and link SDL3::SDL3-static or
-// use the SDL_MAIN_USE_CALLBACKS approach - pick one, don't mix).
-// ---------------------------------------------------------------------------
-
 int main(int argc, char *argv[])
 {
 	platform_state State = {};
@@ -473,10 +444,6 @@ int main(int argc, char *argv[])
 #endif
 
 	GlobalPerfCountFrequency = SDL_GetPerformanceFrequency();
-	bool32 sleep_is_granular = Win32SetSchedulerGranularity();
-
-	// NEW: SDL_Init replaces WNDCLASSA registration + XInput/DirectSound loading.
-	// Use SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD.
 
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD);
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD))
@@ -623,7 +590,6 @@ LPVOID BaseAdress = 0;
 		}
 	}
 
-	Win32ClearSchedulerGranularity();
 	Win32UnloadGameCode(&Game);
 	SDL_Quit();
 
