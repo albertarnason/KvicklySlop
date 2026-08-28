@@ -389,9 +389,6 @@ PlatformCreateWindow(const char *Title, int Width, int Height)
 	return SDL_CreateWindow(Title, Width, Height, SDL_WINDOW_RESIZABLE);
 }
 
-internal void
-PlatformProcessPendingEvents(platform_state *State, game_controller_input *KeyboardController)
-{
 	// NEW: replaces Win32ProcessPendingMessages. Loop SDL_PollEvent, switch on
 	// event.type:
 	//   SDL_EVENT_QUIT                -> GlobalRunning = false;
@@ -408,7 +405,45 @@ PlatformProcessPendingEvents(platform_state *State, game_controller_input *Keybo
 	// Your 'L' loop-recording toggle and internal-build 'P' pause toggle
 	// (VKCode == 'L' / 'P' in the original) port over as
 	// SDL_SCANCODE_L / SDL_SCANCODE_P checks in this same switch.
+
+internal void
+PlatformProcessPendingEvents(platform_state *State, game_controller_input *KeyboardController)
+{
+	SDL_Event Event;
+	while (SDL_PollEvent(&Event))
+	{
+		switch (Event.type)
+		{
+			case SDL_EVENT_QUIT:
+			{
+				GlobalRunning = false;
+			} break;
+
+			case SDL_EVENT_KEY_DOWN:
+			case SDL_EVENT_KEY_UP:
+			{
+				bool32 IsDown = (Event.type == SDL_EVENT_KEY_DOWN);
+				bool32 WasDown = (Event.key.repeat != 0);
+
+				// TODO: map Event.key.scancode to KeyboardController buttons,
+				// e.g.:
+				// if (Event.key.scancode == SDL_SCANCODE_W)
+				//     Win32ProcessKeyboardMessage(&KeyboardController->MoveUp, IsDown);
+
+				if (Event.key.scancode == SDL_SCANCODE_ESCAPE && IsDown)
+				{
+					GlobalRunning = false;
+				}
+			} break;
+
+			case SDL_EVENT_WINDOW_RESIZED:
+			{
+				// TODO: reallocate BackBufferMemory / recreate BackBufferTexture
+			} break;
+		}
+	}
 }
+
 
 
 // ---------------------------------------------------------------------------
