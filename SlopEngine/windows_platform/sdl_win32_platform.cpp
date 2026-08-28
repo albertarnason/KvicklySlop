@@ -473,7 +473,7 @@ int main(int argc, char *argv[])
 #endif
 
 	GlobalPerfCountFrequency = SDL_GetPerformanceFrequency();
-	bool32 SleepIsGranular = Win32SetSchedulerGranularity();
+	bool32 sleep_is_granular = Win32SetSchedulerGranularity();
 
 	// NEW: SDL_Init replaces WNDCLASSA registration + XInput/DirectSound loading.
 	// Use SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD.
@@ -541,6 +541,9 @@ LPVOID BaseAdress = 0;
 
 	real32 GameUpdateHz = 30.0f;
 	real32 TargetSecondsPerFrame = 1.0f / GameUpdateHz;
+	uint64 frame_start;
+	uint64 frame_time;
+	uint64 frame_delay = (uint64)(1000.0f / GameUpdateHz);
 
 	uint64 LastCounter = SDL_GetPerformanceCounter();
 
@@ -559,6 +562,7 @@ LPVOID BaseAdress = 0;
 	GlobalRunning = true;
 	while (GlobalRunning)
 	{
+		frame_start = SDL_GetTicks();
 		// PORT: DLL hot-reload check (CompareFileTime) - unchanged logic
 
 		game_controller_input *OldKeyboardController = GetController(OldInput, 0);
@@ -606,12 +610,12 @@ LPVOID BaseAdress = 0;
 
 			// TODO: sound - fill an SDL audio stream/queue from
 			// Game.GetSoundSamples output, redesigned per audio notes above
+			
+			frame_time = SDL_GetTicks() - frame_start;
 
-			// TODO: frame pacing - SDL_Delay for coarse wait + spin-wait tail,
-			// same two-stage approach as your current Sleep()+busy-wait loop,
-			// just swap Win32GetSecondsElapsed for SDL_GetPerformanceCounter-based calc
-
-			// TODO: present - SDL_UpdateTexture + SDL_RenderTexture + SDL_RenderPresent
+			if (frame_delay > frame_time) {
+				SDL_Delay((uint32)(frame_delay - frame_time)); // Sleep for remaining time
+			}
 
 			game_input *Temp = NewInput;
 			NewInput = OldInput;
