@@ -57,11 +57,11 @@ struct platform_state
 
 	HANDLE RecordingHandle;
 	HANDLE PlaybackHandle;
-	int    InputRecordingIndex;
-	int    InputPlayingIndex;
+	int input_recording_index;
+	int input_playing_index;
 
-	char  EXEFileName[PLATFORM_STATE_FILE_NAME_COUNT];
-	char *OnePastLastEXEFileNameSlash;
+	char exe_file_name[PLATFORM_STATE_FILE_NAME_COUNT];
+	char *one_past_last_exe_file_name_slash;
 };
 
 struct platform_game_code
@@ -70,7 +70,7 @@ struct platform_game_code
 	FILETIME LastWriteTimeDLL;
 	game_update_and_render *UpdateAndRender;
 	game_get_sound_samples *GetSoundSamples;
-	bool32 IsValid;
+	bool32 game_code_is_loaded;
 };
 
 global_variable bool GlobalRunning;
@@ -84,25 +84,42 @@ global_variable int64 GlobalPerfCountFrequency; // PORT: replace usage sites wit
 //       body over almost unchanged, just renamed Platform*
 // ---------------------------------------------------------------------------
 
-internal void
-StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB,
-			 size_t DestCount, char *Dest)
-{
-	// PORT: unchanged from Win32 version
-}
 
-internal int
-StringLength(char *String)
-{
-	// PORT: unchanged from Win32 version
-	return 0;
+//ghetto string concatenation
+internal void StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB, size_t DestCount, char *Dest){
+	for (int index = 0; index < SourceACount; ++index){
+		*Dest++ = *SourceA++;
+	}
+	for (int index = 0; index < SourceBCount; ++index){
+		*Dest++ = *SourceB++;
+	}
+	//TODO dest bounds checking
+	//cc strings end with null terminator
+	*Dest++ = 0;
+}
+internal int StringLength(char *String){
+	int CharCount = 0;
+	//if *String != 0 count, remember C strings are null terminated!
+	while(*String++){
+		++CharCount;
+	}
+	return CharCount;
 }
 
 internal void
 Win32GetEXEFileName(platform_state *State)
 {
-	// PORT: GetModuleFileNameA(0, State->EXEFileName, sizeof(State->EXEFileName));
-	// then scan for last '\\' same as before.
+
+	//260 characters, never use max path can lead to bad results! might return truncated filepath
+	DWORD size_of_file_name = GetModuleFileNameA(0, State->exe_file_name, sizeof(State->exe_file_name));
+	State->one_past_last_exe_file_name_slash = State->exe_file_name;
+	//file truncation
+	for(char *Scan = State->exe_file_name; *Scan; ++Scan){
+		if (*Scan == '\\'){
+			State->one_past_last_exe_file_name_slash = Scan + 1;
+		}
+	}
+
 	// NOTE: on the Linux side this becomes readlink("/proc/self/exe", ...)
 	// and does NOT null-terminate - that's Linux-only, doesn't affect this file.
 }
@@ -110,7 +127,7 @@ Win32GetEXEFileName(platform_state *State)
 internal void
 Win32BuildEXEPathFileName(platform_state *State, char *FileName, int DestCount, char *Dest)
 {
-	// PORT: unchanged from Win32 version (StringConcat call)
+		StringConcat(State->one_past_last_exe_file_name_slash - State->exe_file_name,State->exe_file_name, StringLength(FileName),  FileName, DestCount, Dest);
 }
 
 
@@ -127,7 +144,10 @@ inline FILETIME
 Win32GetLastFileWriteTime(char *FileName)
 {
 	FILETIME LastWriteTime = {};
-	// PORT: GetFileAttributesExA(FileName, GetFileExInfoStandard, &Data) -> LastWriteTime
+		WIN32_FILE_ATTRIBUTE_DATA Data;
+	if(GetFileAttributesExA(FileName, GetFileExInfoStandard, &Data)){
+		LastWriteTime = Data.ftLastWriteTime;
+	}
 	return LastWriteTime;
 }
 
@@ -135,15 +155,34 @@ internal platform_game_code
 Win32LoadGameCode(char *SourceDLLName, char *TempDLLName)
 {
 	platform_game_code Result = {};
-	// PORT: CopyFile + LoadLibraryA + GetProcAddress("GameUpdateAndRender")
-	//       + GetProcAddress("GameGetSoundSamples"), same as Win32LoadGameCode.
+	Result.LastWriteTimeDLL = Win32GetLastFileWriteTime(SourceDLLName);
+	CopyFile(SourceDLLName , TempDLLName, FALSE);
+
+	Result.GameCodeDLL = LoadLibraryA(TempDLLName);
+	if(Result.GameCodeDLL){
+		Result.GetSoundSamples = (game_get_sound_samples *)GetProcAddress(Result.GameCodeDLL, "GameGetSoundSamples");
+		Result.UpdateAndRender = (game_update_and_render *)GetProcAddress(Result.GameCodeDLL, "GameUpdateAndRender");
+	
+		Result.game_code_is_loaded = (Result.UpdateAndRender && Result.GetSoundSamples);
+	}
+
+	if(!Result.game_code_is_loaded){
+		Result.GetSoundSamples = 0;
+		Result.UpdateAndRender = 0;
+	}
 	return Result;
 }
 
 internal void
 Win32UnloadGameCode(platform_game_code *GameCode)
 {
-	// PORT: FreeLibrary + zero out function pointers
+	if(GameCode->GameCodeDLL){
+		FreeLibrary(GameCode->GameCodeDLL);
+		GameCode->GameCodeDLL = 0;
+	}
+	GameCode->game_code_is_loaded = false;
+	GameCode->GetSoundSamples     = 0;
+	GameCode->UpdateAndRender     = 0;
 }
 
 
@@ -157,41 +196,76 @@ Win32UnloadGameCode(platform_game_code *GameCode)
 internal void *
 PlatformAllocateMemory(void *BaseAddress, uint64 Size)
 {
-	// PORT: return VirtualAlloc(BaseAddress, (size_t)Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-	return 0;
+	return VirtualAlloc(BaseAddress, (size_t)Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 }
 
 internal void
 PlatformDeallocateMemory(void *Memory)
 {
-	// PORT: if (Memory) VirtualFree(Memory, 0, MEM_RELEASE);
+ 	if (Memory) VirtualFree(Memory, 0, MEM_RELEASE);
 }
 
-
-// ---------------------------------------------------------------------------
-// Debug read/write entire file
-// PORT: DEBUGPlatformReadEntireFile / DEBUGPlatformWriteEntireFile /
-//       DEBUGPlatformFreeFileMemory bodies unchanged - CreateFileA/ReadFile/
-//       WriteFile/GetFileSizeEx are all still valid, SDL doesn't touch this.
-// ---------------------------------------------------------------------------
-
-DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemory)
-{
-	// PORT: VirtualFree(Memory, 0, MEM_RELEASE);
+DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemory){
+if(Memory){
+	VirtualFree(Memory, 0, MEM_RELEASE);
+	}
 }
 
-DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile)
+DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile){
+debug_read_file_result Result = {};
+HANDLE FileHandle = CreateFileA(Filename,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,0,0);
+if(FileHandle != INVALID_HANDLE_VALUE)
 {
-	debug_read_file_result Result = {};
-	// PORT: unchanged body from win32_handmade.cpp
-	return Result;
+	LARGE_INTEGER FileSize;
+	if(GetFileSizeEx(FileHandle, &FileSize))
+	{
+		uint32 FileSize32 = SafeTruncateUInt64(FileSize.QuadPart);Result.Contents = VirtualAlloc(0,FileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+		if(Result.Contents)
+		{
+			DWORD BytesRead;
+			if(ReadFile(FileHandle, Result.Contents, FileSize32, &BytesRead, 0) && (FileSize32 == BytesRead))
+			{
+				Result.ContentsSize = FileSize32;
+			}
+			else
+			{
+				DEBUGPlatformFreeFileMemory(Thread, Result.Contents);Result.Contents = 0;
+			}
+		}
+		else
+		{
+		}
+	}
+	else
+	{
+	}
+	CloseHandle(FileHandle);
+}
+else
+{
+}
+return(Result);
 }
 
-DEBUG_PLATFORM_WRITE_ENTIRE_FILE(DEBUGPlatformWriteEntireFile)
+DEBUG_PLATFORM_WRITE_ENTIRE_FILE(DEBUGPlatformWriteEntireFile){
+bool32 Result = false;
+HANDLE FileHandle = CreateFileA(Filename,GENERIC_WRITE,0,0,CREATE_ALWAYS,0,0);
+if(FileHandle != INVALID_HANDLE_VALUE)
 {
-	bool32 Result = false;
-	// PORT: unchanged body from win32_handmade.cpp
-	return Result;
+	DWORD BytesWritten;
+	if(WriteFile(FileHandle, Memory,MemorySize, &BytesWritten, 0))
+		{
+			Result =(BytesWritten == MemorySize);
+		}
+	else
+	{
+	}
+	CloseHandle(FileHandle);
+}
+else
+{
+}
+return(Result);
 }
 
 
@@ -209,8 +283,9 @@ internal void
 Win32GetInputFileLocation(platform_state *State, bool32 InputStream, int SlotIndex,
 						   int DestCount, char *Dest)
 {
-	// PORT: wsprintfA(Temp, "loop_edit_%d_%s.hmi", SlotIndex, InputStream ? "input" : "state");
-	//       then Win32BuildEXEPathFileName
+		char Temp[64];
+	wsprintfA(Temp, "loop_edit_%d_%s.hmi", SlotIndex, InputStream ? "input" : "state");
+	Win32BuildEXEPathFileName(State, Temp, DestCount, Dest);
 }
 
 internal platform_replay_buffer *
@@ -220,47 +295,75 @@ Win32GetReplayBuffer(platform_state *State, unsigned int Index)
 	return &State->ReplayBuffers[Index];
 }
 
-internal void
-Win32BeginRecordingInput(platform_state *State, int InputRecordingIndex)
-{
-	// PORT: unchanged body
-}
+internal void Win32BeginRecordingInput(platform_state *State, int input_recording_index){
+	platform_replay_buffer *replay_buffer = Win32GetReplayBuffer(State, input_recording_index);
+	if(replay_buffer->MemoryBlock){
+		State->input_recording_index = input_recording_index;
 
-internal void
-Win32EndRecordingInput(platform_state *State)
-{
-	// PORT: unchanged body
-}
-
-internal void
-Win32BeginInputPlayback(platform_state *State, int InputPlayingIndex)
-{
-	// PORT: unchanged body
-}
-
-internal void
-Win32EndInputPlayback(platform_state *State)
-{
-	// PORT: unchanged body
-}
-
-internal void
-Win32RecordInput(platform_state *State, game_input *InputToRecord)
-{
-	// PORT: unchanged body (WriteFile)
-}
-
-internal void
-Win32PlaybackInput(platform_state *State, game_input *InputToPlayback)
-{
-	// PORT: unchanged body (ReadFile + loop-back-to-start on 0 bytes read)
+		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
+		Win32GetInputFileLocation(State, true, input_recording_index, sizeof(filename), filename);
+		State->RecordingHandle = CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+#if 0
+		LARGE_INTEGER file_position;
+		file_position.QuadPart = State->TotalSize;
+		SetFilePointerEx(State->RecordingHandle, file_position, 0, FILE_BEGIN);
+#endif
+		
+		CopyMemory(replay_buffer->MemoryBlock, State->GameMemoryBlock, State->TotalSize);
+	}
 }
 
 
-// ---------------------------------------------------------------------------
+internal void Win32EndRecordingInput(platform_state *State){
+	CloseHandle(State->RecordingHandle);
+	State->input_recording_index = 0;
+}
+
+internal void Win32BeginInputPlayback(platform_state *State, int input_playing_index){
+	platform_replay_buffer *replay_buffer = Win32GetReplayBuffer(State, input_playing_index);
+	if(replay_buffer->MemoryBlock){
+		State->input_playing_index =  input_playing_index;
+				
+		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
+		Win32GetInputFileLocation(State, true, input_playing_index, sizeof(filename), filename);
+		State->PlaybackHandle = CreateFileA(filename, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
+#if 1
+		LARGE_INTEGER file_position;
+		file_position.QuadPart = State->TotalSize;
+		SetFilePointerEx(State->PlaybackHandle, file_position, 0, FILE_BEGIN);
+#endif
+		CopyMemory(State->GameMemoryBlock, replay_buffer->MemoryBlock, State->TotalSize);
+	}
+}
+
+internal void Win32EndInputPlayback(platform_state *State){
+	CloseHandle(State->PlaybackHandle);
+	State->input_playing_index = 0;
+}
+
+internal void Win32RecordInput(platform_state *State, game_input *input_to_record){
+	DWORD BytesWritten;
+	WriteFile(State->RecordingHandle, input_to_record, sizeof(*input_to_record), &BytesWritten, 0);
+}
+
+internal void Win32PlaybackInput(platform_state *State, game_input *input_to_playback){
+	DWORD BytesRead = 0;
+
+	if(ReadFile(State->PlaybackHandle, input_to_playback, sizeof(*input_to_playback), &BytesRead, 0)){
+		if(BytesRead == 0)
+		{
+			//hit end of stream, go back to beginning
+			int playing_index = State->input_playing_index;
+			Win32EndInputPlayback(State);
+			Win32BeginInputPlayback(State, playing_index);
+			ReadFile(State->PlaybackHandle, input_to_playback, sizeof(*input_to_playback), &BytesRead, 0);
+		}
+	}
+}
+
+
+
 // Scheduler granularity (Windows-only, no Linux equivalent needed)
-// ---------------------------------------------------------------------------
-
 internal bool32
 Win32SetSchedulerGranularity(void)
 {
@@ -276,11 +379,7 @@ Win32ClearSchedulerGranularity(void)
 }
 
 
-// ---------------------------------------------------------------------------
-// Debug console (Windows-only, no Linux equivalent needed - terminal already
-// there when launched from one)
-// ---------------------------------------------------------------------------
-
+// Scheduler granularity (Windows-only, no Linux equivalent needed)
 #if HANDMADE_INTERNAL
 internal void
 Win32AllocDebugConsole(void)
@@ -292,20 +391,10 @@ Win32AllocDebugConsole(void)
 #endif
 
 
-// ---------------------------------------------------------------------------
-// SDL setup helpers
-// NEW: these have no Win32 equivalent - the WNDCLASSA/CreateWindowExA/
-//      Win32MainWindowCallback/DispatchMessageA machinery is entirely
-//      replaced by these three calls.
-// ---------------------------------------------------------------------------
-
 internal SDL_Window *
 PlatformCreateWindow(const char *Title, int Width, int Height)
 {
-	// NEW: SDL_CreateWindow(Title, Width, Height, SDL_WINDOW_RESIZABLE);
-	// NOTE: SDL3 dropped the separate x/y params from SDL2's SDL_CreateWindow -
-	// positioning is done via SDL_SetWindowPosition if needed after creation.
-	return 0;
+	return SDL_CreateWindow(Title, Width, Height, SDL_WINDOW_RESIZABLE);
 }
 
 internal void
@@ -362,6 +451,8 @@ int main(int argc, char *argv[])
 
 	// NEW: SDL_Init replaces WNDCLASSA registration + XInput/DirectSound loading.
 	// Use SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD.
+
+	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD);
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD))
 	{
 		// TODO: log SDL_GetError()
@@ -398,13 +489,22 @@ int main(int argc, char *argv[])
 	// SDL_GetGamepads() / SDL_OpenGamepad() instead of a fixed XUSER_MAX_COUNT
 	// loop over XInputGetState.
 
-	uint64 TotalSize = 0; // TODO: PermanentStorageSize + TransientStorageSize, same as GameMemory setup
-	void *BaseAddress = 0;
+	game_memory GameMemory = {};
+	GameMemory.PermanentStorageSize = Megabytes(64);
+	GameMemory.TransientStorageSize = Gigabytes((uint64)1);		
+	GameMemory.DEBUGPlatformFreeFileMemory  = DEBUGPlatformFreeFileMemory;
+	GameMemory.DEBUGPlatformReadEntireFile  = DEBUGPlatformReadEntireFile;
+	GameMemory.DEBUGPlatformWriteEntireFile = DEBUGPlatformWriteEntireFile;
+
+	State.TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
 #if HANDMADE_INTERNAL
-	BaseAddress = (void *)Terabytes((uint64)2);
+LPVOID BaseAddress = (void *)Terabytes((uint64)2);
+#else
+LPVOID BaseAdress = 0;
 #endif
-	State.GameMemoryBlock = PlatformAllocateMemory(BaseAddress, TotalSize);
-	State.TotalSize = TotalSize;
+	State.GameMemoryBlock = PlatformAllocateMemory(BaseAddress, State.TotalSize);
+	GameMemory.PermanentStorage = State.GameMemoryBlock;
+	GameMemory.TransientStorage = ((uint8 *)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);
 
 	// TODO: replay buffer setup loop (CreateFileMappingA/MapViewOfFile),
 	// ported from the ArrayCount(State.ReplayBuffers) loop in WinMain.
@@ -458,14 +558,14 @@ int main(int argc, char *argv[])
 			// TODO: fill Buffer.Memory/Width/Height/Pitch/BytesPerPixel from
 			// your own backing buffer (see texture note above)
 
-			if (State.InputRecordingIndex) { Win32RecordInput(&State, NewInput); }
-			if (State.InputPlayingIndex)   { Win32PlaybackInput(&State, NewInput); }
+			if (State.input_recording_index) { Win32RecordInput(&State, NewInput); }
+			if (State.input_playing_index)   { Win32PlaybackInput(&State, NewInput); }
 
 			NewInput->dtForFrame = TargetSecondsPerFrame;
 
 			if (Game.UpdateAndRender)
 			{
-				Game.UpdateAndRender(&Thread, 0 /* TODO: &GameMemory */, NewInput, &Buffer);
+				Game.UpdateAndRender(&Thread, &GameMemory, NewInput, &Buffer);
 			}
 
 			// TODO: sound - fill an SDL audio stream/queue from
