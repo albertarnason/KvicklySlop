@@ -8,7 +8,7 @@ mkdir -p build
 #########
 
 # i dont really care about most of these except making the compiler relatively strict
-COMMON_FLAGS="-std=c++11 -Wall -Wextra -Werror -Wshadow -Wconversion -Wsign-conversion -Wundef -Wstrict-aliasing -Wformat=2 -Wmissing-declarations -fno-exceptions -fno-rtti -I SlopEngine/engine"
+COMMON_FLAGS="-std=c++11 -Wall -Werror -Wno-unused -Wshadow -Wconversion -Wsign-conversion -Wundef -Wformat=2 -fno-exceptions -fno-rtti -I SlopEngine/engine"
 
 DEBUG_FLAGS="-O0 -g -DHANDMADE_INTERNAL=1 -DHANDMADE_SLOW=1"
 RELEASE_FLAGS="-O2 -DHANDMADE_INTERNAL=0 -DHANDMADE_SLOW=0"
