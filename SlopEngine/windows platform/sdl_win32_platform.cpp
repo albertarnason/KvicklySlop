@@ -28,7 +28,7 @@
 	  existing handmade.h typedefs
 */
 
-
+#define SDL__MAIN_USE_CALLBACKS 0
 #include <SDL3/SDL.h>
 #include "handmade.h"
 
@@ -76,14 +76,6 @@ struct platform_game_code
 global_variable bool GlobalRunning;
 global_variable bool GlobalPause;
 global_variable int64 GlobalPerfCountFrequency; // PORT: replace usage sites with SDL_GetPerformanceFrequency() - kept here only if you want a cached copy
-
-
-// ---------------------------------------------------------------------------
-// exe path / file name helpers
-// PORT: StringConcat / StringLength / Win32GetEXEFileName / Win32BuildExePathFileName
-//       body over almost unchanged, just renamed Platform*
-// ---------------------------------------------------------------------------
-
 
 //ghetto string concatenation
 internal void StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB, size_t DestCount, char *Dest){
@@ -459,7 +451,9 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	SDL_Window *Window = PlatformCreateWindow("HandmadeHero", 1280, 720);
+	int window_width  = 1280;
+	int window_height =  720;
+	SDL_Window *Window = PlatformCreateWindow("HandmadeHero", window_width, window_height);
 	if (!Window)
 	{
 		// TODO: log SDL_GetError()
@@ -469,13 +463,10 @@ int main(int argc, char *argv[])
 	// NEW: renderer + streaming texture replaces win32_offscreen_buffer +
 	// StretchDIBits. Create once here, recreate texture on resize.
 	SDL_Renderer *Renderer = SDL_CreateRenderer(Window, 0);
-	// TODO: SDL_Texture *BackBufferTexture = SDL_CreateTexture(Renderer,
-	//           SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Width, Height);
+	SDL_Texture *BackBufferTexture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, window_width, window_height);
 	// Keep your existing game_offscreen_buffer.Memory as a plain malloc'd
 	// buffer that your renderer writes into untouched, then each frame:
-	//   SDL_UpdateTexture(BackBufferTexture, 0, Buffer.Memory, Buffer.Pitch);
-	//   SDL_RenderTexture(Renderer, BackBufferTexture, 0, 0);
-	//   SDL_RenderPresent(Renderer);
+
 
 	// NEW: audio device setup replaces Win32InitDSound. SDL3 audio is stream-
 	// based: SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
@@ -520,6 +511,18 @@ LPVOID BaseAdress = 0;
 
 	uint64 LastCounter = SDL_GetPerformanceCounter();
 
+	int BytesPerPixel = 4;
+	void *BackBufferMemory = PlatformAllocateMemory(0, (uint64)(window_width * window_height * BytesPerPixel));
+	//TODO: Needs to be reallocated if SDL_EVENT_WINDOW_RESIZED activates (resizing of window)
+	//extract into function that can be called on event
+
+	game_offscreen_buffer Buffer = {};
+	Buffer.Memory        = BackBufferMemory;
+	Buffer.Width         = window_width;
+	Buffer.Height        = window_height;
+	Buffer.Pitch         = window_width * BytesPerPixel;
+	Buffer.BytesPerPixel = BytesPerPixel;
+	
 	GlobalRunning = true;
 	while (GlobalRunning)
 	{
@@ -554,9 +557,6 @@ LPVOID BaseAdress = 0;
 			// (rename Win32Process* if you want, logic is unchanged)
 
 			thread_context Thread = {};
-			game_offscreen_buffer Buffer = {};
-			// TODO: fill Buffer.Memory/Width/Height/Pitch/BytesPerPixel from
-			// your own backing buffer (see texture note above)
 
 			if (State.input_recording_index) { Win32RecordInput(&State, NewInput); }
 			if (State.input_playing_index)   { Win32PlaybackInput(&State, NewInput); }
@@ -567,6 +567,9 @@ LPVOID BaseAdress = 0;
 			{
 				Game.UpdateAndRender(&Thread, &GameMemory, NewInput, &Buffer);
 			}
+			SDL_UpdateTexture(BackBufferTexture, 0, Buffer.Memory, Buffer.Pitch);
+			SDL_RenderTexture(Renderer, BackBufferTexture, 0, 0);
+			SDL_RenderPresent(Renderer);
 
 			// TODO: sound - fill an SDL audio stream/queue from
 			// Game.GetSoundSamples output, redesigned per audio notes above
