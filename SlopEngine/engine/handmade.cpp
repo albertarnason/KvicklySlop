@@ -316,7 +316,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
 
 	//For loop for multiple controller
-	for(int ControllerIndex = 0; ControllerIndex <ArrayCount(Input->Controllers); ++ControllerIndex){
+	for(uint32 ControllerIndex = 0; ControllerIndex <(uint32)(ArrayCount(Input->Controllers)); ++ControllerIndex){
 		game_controller_input *Controller = GetController(Input, ControllerIndex);
 		if(Controller->Analog){
 		} 
