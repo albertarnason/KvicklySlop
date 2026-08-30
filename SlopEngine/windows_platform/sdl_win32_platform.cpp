@@ -555,6 +555,7 @@ LPVOID BaseAdress = 0;
     
     int32 BytesToWrite = (int32)TargetQueueBytes - (int32)CurrentlyQueuedBytes;
 	int BytesPerStereoSample = spec.channels * sizeof(int16); // 2 channels * 2 bytes = 4 bytes
+	int16 *AudioSampleScratchBuffer = (int16 *)SDL_malloc(TargetQueueBytes);
 
 	GlobalRunning = true;
 	while (GlobalRunning)
@@ -607,11 +608,10 @@ LPVOID BaseAdress = 0;
 			CurrentlyQueuedBytes = SDL_GetAudioStreamQueued(audio_stream);
 			BytesToWrite = TargetQueueBytes - CurrentlyQueuedBytes;
 			 if (BytesToWrite > 0) {
-				
 				SoundBuffer.SampleCount = (int32)(BytesToWrite / BytesPerStereoSample);
 				
 				// 3. Allocate temporary memory for this frame's audio chunks
-				SoundBuffer.Samples = (int16 *)SDL_malloc(BytesToWrite);
+				SoundBuffer.Samples = SoundBuffer.Samples = AudioSampleScratchBuffer;
 				
 				// 4. CALL YOUR GAME LAYER API
 				// Pass your existing platform-tracked Thread and Memory pointers here
@@ -619,9 +619,6 @@ LPVOID BaseAdress = 0;
 				
 				// 5. Submit the newly generated data to the SDL3 stream
 				SDL_PutAudioStreamData(audio_stream, SoundBuffer.Samples, BytesToWrite);
-				
-				// 6. Free the temporary heap allocation
-				SDL_free(SoundBuffer.Samples);
 			}
 					
 			frame_time = SDL_GetTicks() - frame_start;
@@ -637,6 +634,7 @@ LPVOID BaseAdress = 0;
 	}
 
 	Win32UnloadGameCode(&Game);
+	SDL_free(AudioSampleScratchBuffer);
 	SDL_DestroyAudioStream(audio_stream);
 	SDL_Quit();
 
