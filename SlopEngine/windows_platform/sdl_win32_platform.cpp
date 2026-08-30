@@ -445,7 +445,7 @@ int main(int argc, char *argv[])
 
 	GlobalPerfCountFrequency = SDL_GetPerformanceFrequency();
 
-	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD);
+	//SDL INITIALIZATION
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD))
 	{
 		// TODO: log SDL_GetError()
@@ -468,17 +468,12 @@ int main(int argc, char *argv[])
 	SDL_SetTextureBlendMode(BackBufferTexture, SDL_BLENDMODE_NONE);
 
 
-	// NEW: audio device setup replaces Win32InitDSound. SDL3 audio is stream-
-	// based: SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
-	// &spec, callback, userdata) or SDL_PutAudioStreamData if you want to push
-	// samples explicitly each frame like your current DirectSound loop does.
-	// This does NOT port 1:1 - the PlayCursor/WriteCursor prediction math in
-	// your current WinMain (audio_card_is_low_latency etc.) has no equivalent
-	// concept in SDL's audio stream model and should be redesigned, not moved.
 
 	// NEW: gamepad open replaces Win32LoadXInpuT. Enumerate with
 	// SDL_GetGamepads() / SDL_OpenGamepad() instead of a fixed XUSER_MAX_COUNT
 	// loop over XInputGetState.
+
+	thread_context Thread = {};
 
 	game_memory GameMemory = {};
 	GameMemory.PermanentStorageSize = Megabytes(64);
@@ -526,6 +521,42 @@ LPVOID BaseAdress = 0;
 	Buffer.Pitch         = window_width * BytesPerPixel;
 	Buffer.BytesPerPixel = BytesPerPixel;
 	
+	
+	// NEW: audio device setup replaces Win32InitDSound. SDL3 audio is stream-
+	// based: SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+	// &spec, callback, userdata) or SDL_PutAudioStreamData if you want to push
+	// samples explicitly each frame like your current DirectSound loop does.
+	// This does NOT port 1:1 - the PlayCursor/WriteCursor prediction math in
+	// your current WinMain (audio_card_is_low_latency etc.) has no equivalent
+	// concept in SDL's audio stream model and should be redesigned, not moved.
+	SDL_AudioSpec spec = {
+    SDL_AUDIO_S16LE, // format
+    2,               // channels
+    48000           // freq
+	};
+
+	SDL_AudioStream *audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+
+	if (!audio_stream) {
+    SDL_Log("Failed to create audio stream: %s", SDL_GetError());
+	}
+
+	SDL_ResumeAudioStreamDevice(audio_stream);
+
+
+	game_sound_output_buffer SoundBuffer = {};
+	SoundBuffer.SamplesPerSecond = spec.freq;
+
+	real32 AudioBufferDuration = TargetSecondsPerFrame * 3.0f;
+
+	int BytesPerSample = spec.channels * sizeof(int16);
+	uint32 TargetQueueBytes = (uint32)((real32)spec.freq * AudioBufferDuration * (real32)BytesPerSample);
+    int CurrentlyQueuedBytes = SDL_GetAudioStreamQueued(audio_stream);
+    
+    int32 BytesToWrite = (int32)TargetQueueBytes - (int32)CurrentlyQueuedBytes;
+	int BytesPerStereoSample = spec.channels * sizeof(int16); // 2 channels * 2 bytes = 4 bytes
+	int16 *AudioSampleScratchBuffer = (int16 *)SDL_malloc(TargetQueueBytes);
+
 	GlobalRunning = true;
 	while (GlobalRunning)
 	{
@@ -560,8 +591,6 @@ LPVOID BaseAdress = 0;
 			// Win32ProcessXInputStickValue / Win32ProcessXInputDigitalButton
 			// (rename Win32Process* if you want, logic is unchanged)
 
-			thread_context Thread = {};
-
 			if (State.input_recording_index) { Win32RecordInput(&State, NewInput); }
 			if (State.input_playing_index)   { Win32PlaybackInput(&State, NewInput); }
 
@@ -575,9 +604,23 @@ LPVOID BaseAdress = 0;
 			SDL_RenderTexture(Renderer, BackBufferTexture, 0, 0);
 			SDL_RenderPresent(Renderer);
 
-			// TODO: sound - fill an SDL audio stream/queue from
-			// Game.GetSoundSamples output, redesigned per audio notes above
-			
+
+			CurrentlyQueuedBytes = SDL_GetAudioStreamQueued(audio_stream);
+			BytesToWrite = TargetQueueBytes - CurrentlyQueuedBytes;
+			 if (BytesToWrite > 0) {
+				SoundBuffer.SampleCount = (int32)(BytesToWrite / BytesPerStereoSample);
+				
+				// 3. Allocate temporary memory for this frame's audio chunks
+				SoundBuffer.Samples = SoundBuffer.Samples = AudioSampleScratchBuffer;
+				
+				// 4. CALL YOUR GAME LAYER API
+				// Pass your existing platform-tracked Thread and Memory pointers here
+				Game.GetSoundSamples(&Thread, &GameMemory, &SoundBuffer);
+				
+				// 5. Submit the newly generated data to the SDL3 stream
+				SDL_PutAudioStreamData(audio_stream, SoundBuffer.Samples, BytesToWrite);
+			}
+					
 			frame_time = SDL_GetTicks() - frame_start;
 
 			if (frame_delay > frame_time) {
@@ -591,6 +634,8 @@ LPVOID BaseAdress = 0;
 	}
 
 	Win32UnloadGameCode(&Game);
+	SDL_free(AudioSampleScratchBuffer);
+	SDL_DestroyAudioStream(audio_stream);
 	SDL_Quit();
 
 	return 0;

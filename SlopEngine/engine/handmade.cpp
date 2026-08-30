@@ -11,7 +11,7 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 
 	for (int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex){
 //sound flag for debug sound
-#if 0	
+#if 1	
 			real32 SineValue = sinf(GameState->tSine);
 			int16 SampleValue = (int16)(SineValue * ToneVolume);
 			*SampleOut++ = SampleValue;
