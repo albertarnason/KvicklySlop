@@ -21,7 +21,7 @@ jobs:
 
   linux:
     name: Compile Linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Checkout
@@ -29,7 +29,6 @@ jobs:
 
       - name: Download dependencies
         run: |
-          sudo add-apt-repository universe
           sudo apt-get update
           sudo apt-get install -y libsdl3-dev pkg-config
 
