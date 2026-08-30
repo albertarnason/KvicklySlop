@@ -25,7 +25,7 @@ else
   BUILD_FLAGS="$DEBUG_FLAGS"
 fi
 
-PLATFORM_FLAGS="-ldl $(pkg-config --cflags --libs sdl3)"
+PLATFORM_FLAGS="-ldl -L SlopEngine/SDL3/lib/linux -lSDL3"
 
 ##############
 # Game layer #
