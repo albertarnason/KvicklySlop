@@ -66,8 +66,8 @@ struct platform_state
 
 struct platform_game_code
 {
-	HMODULE GameCodeDLL;
-	FILETIME LastWriteTimeDLL;
+	SDL_SharedObject *GameCodeDLL;
+	SDL_Time LastWriteTimeDLL;
 	game_update_and_render *UpdateAndRender;
 	game_get_sound_samples *GetSoundSamples;
 	bool32 game_code_is_loaded;
@@ -89,7 +89,7 @@ internal void StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCou
 	//cc strings end with null terminator
 	*Dest++ = 0;
 }
-internal int StringLength(char *String){
+internal int StringLength(const char *String){
 	int CharCount = 0;
 	//if *String != 0 count, remember C strings are null terminated!
 	while(*String++){
@@ -99,28 +99,52 @@ internal int StringLength(char *String){
 }
 
 internal void
-Win32GetEXEFileName(platform_state *State)
+StringCopy(int SourceCount, const char *Source, int DestCount, char *Dest)
 {
+	// Assert instead of silently truncating - Handmade Hero convention
+	// so oversized paths get caught immediately in debug builds
+	Assert(SourceCount < DestCount);
 
-	//260 characters, never use max path can lead to bad results! might return truncated filepath
-	DWORD size_of_file_name = GetModuleFileNameA(0, State->exe_file_name, sizeof(State->exe_file_name));
-	State->one_past_last_exe_file_name_slash = State->exe_file_name;
-	//file truncation
-	for(char *Scan = State->exe_file_name; *Scan; ++Scan){
-		if (*Scan == '\\'){
-			State->one_past_last_exe_file_name_slash = Scan + 1;
-		}
+	for(int Index = 0; Index < SourceCount; ++Index)
+	{
+		Dest[Index] = Source[Index];
 	}
 
-	// NOTE: on the Linux side this becomes readlink("/proc/self/exe", ...)
-	// and does NOT null-terminate - that's Linux-only, doesn't affect this file.
+	Dest[SourceCount] = 0;
+}
+
+
+
+internal void
+SDLGetEXEFileName(platform_state *State){
+	const char *base_path = SDL_GetBasePath();
+	
+	StringCopy(StringLength(base_path), base_path, sizeof(State->exe_file_name), State->exe_file_name);
+
+		State->one_past_last_exe_file_name_slash = State->exe_file_name + StringLength(base_path);
+
 }
 
 internal void
-Win32BuildEXEPathFileName(platform_state *State, char *FileName, int DestCount, char *Dest)
+SDLBuildEXEPathFileName(platform_state *State, char *FileName, int DestCount, char *Dest)
 {
 		StringConcat(State->one_past_last_exe_file_name_slash - State->exe_file_name,State->exe_file_name, StringLength(FileName),  FileName, DestCount, Dest);
 }
+
+internal SDL_Time
+SDLGetLastFileWriteTime(char *FileName)
+{
+	SDL_Time LastWriteTime = 0;
+
+	SDL_PathInfo PathInfo;
+	if(SDL_GetPathInfo(FileName, &PathInfo))
+	{
+		LastWriteTime = PathInfo.modify_time;
+	}
+
+	return LastWriteTime;
+}
+
 
 
 // ---------------------------------------------------------------------------
@@ -132,44 +156,34 @@ Win32BuildEXEPathFileName(platform_state *State, char *FileName, int DestCount, 
 //       if you want fewer #ifdefs later - functionally equivalent here.
 // ---------------------------------------------------------------------------
 
-inline FILETIME
-Win32GetLastFileWriteTime(char *FileName)
-{
-	FILETIME LastWriteTime = {};
-		WIN32_FILE_ATTRIBUTE_DATA Data;
-	if(GetFileAttributesExA(FileName, GetFileExInfoStandard, &Data)){
-		LastWriteTime = Data.ftLastWriteTime;
-	}
-	return LastWriteTime;
-}
 
-internal platform_game_code
-Win32LoadGameCode(char *SourceDLLName, char *TempDLLName)
-{
+
+internal platform_game_code SDLLoadGameCode (char *SourceDLLName, char *TempDLLName){
 	platform_game_code Result = {};
-	Result.LastWriteTimeDLL = Win32GetLastFileWriteTime(SourceDLLName);
-	CopyFile(SourceDLLName , TempDLLName, FALSE);
+	Result.LastWriteTimeDLL = SDLGetLastFileWriteTime(SourceDLLName);
+		SDL_CopyFile(SourceDLLName, TempDLLName);
 
-	Result.GameCodeDLL = LoadLibraryA(TempDLLName);
+		Result.GameCodeDLL = SDL_LoadObject(TempDLLName);
 	if(Result.GameCodeDLL){
-		Result.GetSoundSamples = (game_get_sound_samples *)GetProcAddress(Result.GameCodeDLL, "GameGetSoundSamples");
-		Result.UpdateAndRender = (game_update_and_render *)GetProcAddress(Result.GameCodeDLL, "GameUpdateAndRender");
+		Result.GetSoundSamples = (game_get_sound_samples *)SDL_LoadFunction(Result.GameCodeDLL, "GameGetSoundSamples");
+		Result.UpdateAndRender = (game_update_and_render *)SDL_LoadFunction(Result.GameCodeDLL, "GameUpdateAndRender");
 	
 		Result.game_code_is_loaded = (Result.UpdateAndRender && Result.GetSoundSamples);
 	}
-
-	if(!Result.game_code_is_loaded){
+		if(!Result.game_code_is_loaded)
+	{
 		Result.GetSoundSamples = 0;
 		Result.UpdateAndRender = 0;
 	}
+
 	return Result;
 }
 
 internal void
-Win32UnloadGameCode(platform_game_code *GameCode)
+SDLUnloadGameCode(platform_game_code *GameCode)
 {
 	if(GameCode->GameCodeDLL){
-		FreeLibrary(GameCode->GameCodeDLL);
+		SDL_UnloadObject(GameCode->GameCodeDLL);
 		GameCode->GameCodeDLL = 0;
 	}
 	GameCode->game_code_is_loaded = false;
@@ -276,7 +290,7 @@ Win32GetInputFileLocation(platform_state *State, bool32 InputStream, int SlotInd
 {
 		char Temp[64];
 	wsprintfA(Temp, "loop_edit_%d_%s.hmi", SlotIndex, InputStream ? "input" : "state");
-	Win32BuildEXEPathFileName(State, Temp, DestCount, Dest);
+	SDLBuildEXEPathFileName(State, Temp, DestCount, Dest);
 }
 
 internal platform_replay_buffer *
@@ -427,16 +441,16 @@ PlatformProcessPendingEvents(platform_state *State, game_controller_input *Keybo
 int main(int argc, char *argv[])
 {
 	platform_state State = {};
-	Win32GetEXEFileName(&State);
+	SDLGetEXEFileName(&State);
 
 	char SourceGameCodeDLLFullPath[PLATFORM_STATE_FILE_NAME_COUNT];
 	char SourceGameCodeDLLFileName[] = "handmade.dll";
-	Win32BuildEXEPathFileName(&State, SourceGameCodeDLLFileName,
+	SDLBuildEXEPathFileName(&State, SourceGameCodeDLLFileName,
 							   sizeof(SourceGameCodeDLLFullPath), SourceGameCodeDLLFullPath);
 
 	char TempGameCodeDLLFullPath[PLATFORM_STATE_FILE_NAME_COUNT];
 	char TempGameCodeDLLFileName[] = "handmade_temp.dll";
-	Win32BuildEXEPathFileName(&State, TempGameCodeDLLFileName,
+	SDLBuildEXEPathFileName(&State, TempGameCodeDLLFileName,
 							   sizeof(TempGameCodeDLLFullPath), TempGameCodeDLLFullPath);
 
 #if HANDMADE_INTERNAL
@@ -495,7 +509,7 @@ LPVOID BaseAdress = 0;
 	// TODO: replay buffer setup loop (CreateFileMappingA/MapViewOfFile),
 	// ported from the ArrayCount(State.ReplayBuffers) loop in WinMain.
 
-	platform_game_code Game = Win32LoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
+	platform_game_code Game = SDLLoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
 
 	game_input Input[2] = {};
 	game_input *NewInput = &Input[0];
@@ -635,7 +649,7 @@ LPVOID BaseAdress = 0;
 		}
 	}
 
-	Win32UnloadGameCode(&Game);
+	SDLUnloadGameCode(&Game);
 	SDL_free(AudioSampleScratchBuffer);
 	SDL_DestroyAudioStream(audio_stream);
 	SDL_Quit();
