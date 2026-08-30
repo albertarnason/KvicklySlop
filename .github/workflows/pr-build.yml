@@ -1,0 +1,38 @@
+name: Compile on all platforms
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  windows:
+    name: Compile Windows
+    runs-on: windows-11-vs2026-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run build script
+        shell: cmd
+        run: |
+          call "%ProgramFiles%\Microsoft Visual Studio\18\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=arm64
+          call build.bat          
+
+  linux:
+    name: Compile Linux
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl3-dev pkg-config
+
+      - name: Run build script
+        run: |
+          ./build.sh
