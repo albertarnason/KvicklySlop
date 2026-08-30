@@ -8,7 +8,7 @@ on:
 jobs:
   windows:
     name: Compile Windows
-    runs-on: windows-11-vs2026-arm64
+    runs-on: windows-11-vs2026-arm
 
     steps:
       - name: Checkout
