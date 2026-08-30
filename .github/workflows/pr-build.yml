@@ -27,6 +27,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Download dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl3-dev pkg-config
+
       - name: Run build script
         run: |
           ./build.sh
