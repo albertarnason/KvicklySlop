@@ -608,6 +608,7 @@ LPVOID BaseAdress = 0;
 			CurrentlyQueuedBytes = SDL_GetAudioStreamQueued(audio_stream);
 			BytesToWrite = TargetQueueBytes - CurrentlyQueuedBytes;
 			 if (BytesToWrite > 0) {
+				
 				SoundBuffer.SampleCount = (int32)(BytesToWrite / BytesPerStereoSample);
 				
 				// 3. Allocate temporary memory for this frame's audio chunks
@@ -619,6 +620,7 @@ LPVOID BaseAdress = 0;
 				
 				// 5. Submit the newly generated data to the SDL3 stream
 				SDL_PutAudioStreamData(audio_stream, SoundBuffer.Samples, BytesToWrite);
+
 			}
 					
 			frame_time = SDL_GetTicks() - frame_start;
