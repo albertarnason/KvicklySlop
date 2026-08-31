@@ -299,6 +299,13 @@ PlatformCreateWindow(const char *Title, int Width, int Height)
 	// (VKCode == 'L' / 'P' in the original) port over as
 	// SDL_SCANCODE_L / SDL_SCANCODE_P checks in this same switch.
 
+internal void SDLProcessKeyboardMessage(game_button_state *NewState, bool32 IsDown){
+	if(NewState->EndedDown != IsDown){
+		NewState->EndedDown = IsDown;
+		++NewState->HalfTransitionCount;
+	}
+}
+
 internal void
 PlatformProcessPendingEvents(platform_state *State, game_controller_input *KeyboardController)
 {
@@ -322,10 +329,47 @@ PlatformProcessPendingEvents(platform_state *State, game_controller_input *Keybo
 				// e.g.:
 				// if (Event.key.scancode == SDL_SCANCODE_W)
 				//     Win32ProcessKeyboardMessage(&KeyboardController->MoveUp, IsDown);
-
-				if (Event.key.scancode == SDL_SCANCODE_ESCAPE && IsDown)
+				if (WasDown != IsDown)
 				{
-					GlobalRunning = false;
+					if      (Event.key.scancode == SDL_SCANCODE_W)        { SDLProcessKeyboardMessage(&KeyboardController->MoveUp, 	     IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_A)        { SDLProcessKeyboardMessage(&KeyboardController->MoveLeft, 	 IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_S)        { SDLProcessKeyboardMessage(&KeyboardController->MoveDown, 	 IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_D)        { SDLProcessKeyboardMessage(&KeyboardController->MoveRight,    IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_Q)        { SDLProcessKeyboardMessage(&KeyboardController->LeftShoulder, IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_E)        { SDLProcessKeyboardMessage(&KeyboardController->RightShoulder,IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_UP)       { SDLProcessKeyboardMessage(&KeyboardController->ActionUp,     IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_DOWN)     { SDLProcessKeyboardMessage(&KeyboardController->ActionDown,   IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_LEFT)     { SDLProcessKeyboardMessage(&KeyboardController->ActionLeft, 	 IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_RIGHT)    { SDLProcessKeyboardMessage(&KeyboardController->ActionRight,  IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_SPACE)    { SDLProcessKeyboardMessage(&KeyboardController->Back, 	     IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_ESCAPE)   { SDLProcessKeyboardMessage(&KeyboardController->Start, 	     IsDown);}
+					//loop mode
+					else if (Event.key.scancode == SDL_SCANCODE_L){
+						if(IsDown){
+							if(State->input_playing_index == 0){
+
+								if(State->input_recording_index == 0){
+									SDLBeginRecordingInput(State, 1);
+								}
+								else{
+									SDLEndRecordingInput(State);
+									SDLBeginInputPlayback(State, 1);
+								}
+							}
+							else{
+								SDLEndInputPlayback(State);
+							}
+						}
+					}
+				}
+				if (Event.key.scancode == SDL_SCANCODE_P && IsDown)
+				{
+					if(GlobalPause){
+						GlobalPause = false;
+					}
+					else{
+						GlobalPause = true;
+					}
 				}
 			} break;
 
@@ -336,6 +380,7 @@ PlatformProcessPendingEvents(platform_state *State, game_controller_input *Keybo
 		}
 	}
 }
+
 
 int main(int argc, char *argv[])
 {
