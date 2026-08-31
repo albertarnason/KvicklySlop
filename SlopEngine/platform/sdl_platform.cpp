@@ -583,7 +583,7 @@ void* BaseAddress = 0;
 
 			}
 					
-			// Frame pacing
+			// Frame pacing, cpu melting solution of sleeping
 			uint64 WorkCounter = SDLGetWallClock();
 			real32 WorkSecondsElapsed = SDLGetSecondsElapsed(LastCounter, WorkCounter);
 			real32 SecondsElapsedForFrame = WorkSecondsElapsed;
