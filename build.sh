@@ -41,5 +41,5 @@ g++ SlopEngine/engine/handmade.cpp -o build/libhandmade.so -shared -fPIC $COMMON
 # Platform layer #
 ##################
 
-g++ SlopEngine/linux_platform/sdl_linux_platform.cpp -o build/handmade $COMMON_FLAGS $BUILD_FLAGS $PLATFORM_FLAGS
+g++ SlopEngine/windows_platform/sdl_win32_platform.cpp -o build/handmade $COMMON_FLAGS $BUILD_FLAGS $PLATFORM_FLAGS
 
