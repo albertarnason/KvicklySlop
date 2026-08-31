@@ -574,8 +574,14 @@ LPVOID BaseAdress = 0;
 	GlobalRunning = true;
 	while (GlobalRunning)
 	{
+		SDL_Time newdllwritetime = SDLGetLastFileWriteTime(SourceGameCodeDLLFullPath);
+			if(newdllwritetime && (newdllwritetime > Game.LastWriteTimeDLL))
+			{
+				SDLUnloadGameCode(&Game);
+				Game = SDLLoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
+			}
 		frame_start = SDL_GetTicks();
-		// PORT: DLL hot-reload check (CompareFileTime) - unchanged logic
+
 
 		game_controller_input *OldKeyboardController = GetController(OldInput, 0);
 		game_controller_input *NewKeyboardController = GetController(NewInput, 0);
