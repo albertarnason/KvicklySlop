@@ -32,19 +32,25 @@
 #include <SDL3/SDL.h>
 #include "handmade.h"
 
-#include <windows.h>
+#if defined(_WIN32)
+    #include <windows.h>
+#else
+    #include <sys/mman.h>
+#endif
+
 #include <stdio.h>
 
 // ---------------------------------------------------------------------------
 // Platform-specific state (Windows side of the split)
 // ---------------------------------------------------------------------------
 
-#define PLATFORM_STATE_FILE_NAME_COUNT MAX_PATH
+//max path
+#define PLATFORM_STATE_FILE_NAME_COUNT 260
 
 struct platform_replay_buffer
 {
-	HANDLE FileHandle;
-	HANDLE MemoryMap;
+	void* FileHandle;
+	void* MemoryMap;
 	char   Filename[PLATFORM_STATE_FILE_NAME_COUNT];
 	void  *MemoryBlock;
 };
@@ -55,8 +61,8 @@ struct platform_state
 	void  *GameMemoryBlock;
 	platform_replay_buffer ReplayBuffers[4];
 
-	HANDLE RecordingHandle;
-	HANDLE PlaybackHandle;
+	SDL_IOStream *RecordingHandle;
+	SDL_IOStream *PlaybackHandle;
 	int input_recording_index;
 	int input_playing_index;
 
@@ -202,76 +208,51 @@ SDLUnloadGameCode(platform_game_code *GameCode)
 internal void *
 PlatformAllocateMemory(void *BaseAddress, uint64 Size)
 {
-	return VirtualAlloc(BaseAddress, (size_t)Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+#if defined(_WIN32)
+    return VirtualAlloc(BaseAddress, (size_t)Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+#else
+    void *Result = mmap(BaseAddress, (size_t)Size, PROT_READ|PROT_WRITE,
+                         MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    return (Result == MAP_FAILED) ? 0 : Result;
+#endif
 }
 
 internal void
-PlatformDeallocateMemory(void *Memory)
+PlatformDeallocateMemory(void *Memory, uint64 Size)
 {
- 	if (Memory) VirtualFree(Memory, 0, MEM_RELEASE);
-}
-
-DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemory){
-if(Memory){
-	VirtualFree(Memory, 0, MEM_RELEASE);
-	}
+#if defined(_WIN32)
+    (void)Size; // VirtualFree with MEM_RELEASE doesn't need a size
+    if (Memory) VirtualFree(Memory, 0, MEM_RELEASE);
+#else
+    if (Memory) munmap(Memory, (size_t)Size);
+#endif
 }
 
 DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile){
-debug_read_file_result Result = {};
-HANDLE FileHandle = CreateFileA(Filename,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,0,0);
-if(FileHandle != INVALID_HANDLE_VALUE)
-{
-	LARGE_INTEGER FileSize;
-	if(GetFileSizeEx(FileHandle, &FileSize))
+	debug_read_file_result Result = {};
+
+	size_t FileSize = 0;
+	void *FileData = SDL_LoadFile(Filename, &FileSize);
+
+	if(FileData)
 	{
-		uint32 FileSize32 = SafeTruncateUInt64(FileSize.QuadPart);Result.Contents = VirtualAlloc(0,FileSize32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-		if(Result.Contents)
-		{
-			DWORD BytesRead;
-			if(ReadFile(FileHandle, Result.Contents, FileSize32, &BytesRead, 0) && (FileSize32 == BytesRead))
-			{
-				Result.ContentsSize = FileSize32;
-			}
-			else
-			{
-				DEBUGPlatformFreeFileMemory(Thread, Result.Contents);Result.Contents = 0;
-			}
-		}
-		else
-		{
-		}
+		Result.Contents     = FileData;
+		Result.ContentsSize = SafeTruncateUInt64(FileSize);
 	}
-	else
-	{
-	}
-	CloseHandle(FileHandle);
-}
-else
-{
-}
-return(Result);
+
+	return(Result);
 }
 
 DEBUG_PLATFORM_WRITE_ENTIRE_FILE(DEBUGPlatformWriteEntireFile){
-bool32 Result = false;
-HANDLE FileHandle = CreateFileA(Filename,GENERIC_WRITE,0,0,CREATE_ALWAYS,0,0);
-if(FileHandle != INVALID_HANDLE_VALUE)
-{
-	DWORD BytesWritten;
-	if(WriteFile(FileHandle, Memory,MemorySize, &BytesWritten, 0))
-		{
-			Result =(BytesWritten == MemorySize);
-		}
-	else
+	bool32 Result = SDL_SaveFile(Filename, Memory, MemorySize);
+	return(Result);
+}
+
+DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemory){
+	if(Memory)
 	{
+		SDL_free(Memory);
 	}
-	CloseHandle(FileHandle);
-}
-else
-{
-}
-return(Result);
 }
 
 
@@ -286,96 +267,80 @@ return(Result);
 // ---------------------------------------------------------------------------
 
 internal void
-Win32GetInputFileLocation(platform_state *State, bool32 InputStream, int SlotIndex, int DestCount, char *Dest)
+SDLGetInputFileLocation(platform_state *State, bool32 InputStream, int SlotIndex, int DestCount, char *Dest)
 {
 		char Temp[64];
-	wsprintfA(Temp, "loop_edit_%d_%s.hmi", SlotIndex, InputStream ? "input" : "state");
+	snprintf(Temp, sizeof(Temp), "loop_edit_%d_%s.hmi", SlotIndex, InputStream ? "input" : "state");
 	SDLBuildEXEPathFileName(State, Temp, DestCount, Dest);
 }
 
 internal platform_replay_buffer *
-Win32GetReplayBuffer(platform_state *State, unsigned int Index)
+SDLGetReplayBuffer(platform_state *State, unsigned int Index)
 {
 	Assert(Index < ArrayCount(State->ReplayBuffers));
 	return &State->ReplayBuffers[Index];
 }
 
-internal void Win32BeginRecordingInput(platform_state *State, int input_recording_index){
-	platform_replay_buffer *replay_buffer = Win32GetReplayBuffer(State, input_recording_index);
+internal void SDLBeginRecordingInput(platform_state *State, int input_recording_index){
+	platform_replay_buffer *replay_buffer = SDLGetReplayBuffer(State, input_recording_index);
 	if(replay_buffer->MemoryBlock){
 		State->input_recording_index = input_recording_index;
 
 		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
-		Win32GetInputFileLocation(State, true, input_recording_index, sizeof(filename), filename);
-		State->RecordingHandle = CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
-#if 0
-		LARGE_INTEGER file_position;
-		file_position.QuadPart = State->TotalSize;
-		SetFilePointerEx(State->RecordingHandle, file_position, 0, FILE_BEGIN);
-#endif
+		SDLGetInputFileLocation(State, true, input_recording_index, sizeof(filename), filename);
+		State->RecordingHandle = SDL_IOFromFile(filename, "w");
 		
-		CopyMemory(replay_buffer->MemoryBlock, State->GameMemoryBlock, State->TotalSize);
+#if 0
+		SDL_SeekIO(State->RecordingHandle, State->TotalSize, SDL_IO_SEEK_SET);
+#endif
+		memcpy(replay_buffer->MemoryBlock, State->GameMemoryBlock, State->TotalSize);
 	}
 }
 
 
-internal void Win32EndRecordingInput(platform_state *State){
-	CloseHandle(State->RecordingHandle);
+internal void SDLEndRecordingInput(platform_state *State){
+	SDL_CloseIO(State->RecordingHandle);
 	State->input_recording_index = 0;
 }
 
-internal void Win32BeginInputPlayback(platform_state *State, int input_playing_index){
-	platform_replay_buffer *replay_buffer = Win32GetReplayBuffer(State, input_playing_index);
+internal void SDLBeginInputPlayback(platform_state *State, int input_playing_index){
+	platform_replay_buffer *replay_buffer = SDLGetReplayBuffer(State, input_playing_index);
 	if(replay_buffer->MemoryBlock){
 		State->input_playing_index =  input_playing_index;
 				
 		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
-		Win32GetInputFileLocation(State, true, input_playing_index, sizeof(filename), filename);
-		State->PlaybackHandle = CreateFileA(filename, GENERIC_READ, 0, 0, OPEN_EXISTING, 0, 0);
+		SDLGetInputFileLocation(State, true, input_playing_index, sizeof(filename), filename);
+		State->PlaybackHandle = SDL_IOFromFile(filename, "r");
 #if 1
-		LARGE_INTEGER file_position;
-		file_position.QuadPart = State->TotalSize;
-		SetFilePointerEx(State->PlaybackHandle, file_position, 0, FILE_BEGIN);
+		SDL_SeekIO(State->RecordingHandle, State->TotalSize, SDL_IO_SEEK_SET);
 #endif
-		CopyMemory(State->GameMemoryBlock, replay_buffer->MemoryBlock, State->TotalSize);
+		memcpy(State->GameMemoryBlock, replay_buffer->MemoryBlock, State->TotalSize);
 	}
 }
 
-internal void Win32EndInputPlayback(platform_state *State){
-	CloseHandle(State->PlaybackHandle);
+internal void SDLEndInputPlayback(platform_state *State){
+	SDL_CloseIO(State->PlaybackHandle);
 	State->input_playing_index = 0;
 }
 
-internal void Win32RecordInput(platform_state *State, game_input *input_to_record){
-	DWORD BytesWritten;
-	WriteFile(State->RecordingHandle, input_to_record, sizeof(*input_to_record), &BytesWritten, 0);
+internal void SDLRecordInput(platform_state *State, game_input *input_to_record){
+	SDL_WriteIO(State->RecordingHandle, input_to_record, sizeof(*input_to_record));
 }
 
-internal void Win32PlaybackInput(platform_state *State, game_input *input_to_playback){
-	DWORD BytesRead = 0;
+internal void SDLPlaybackInput(platform_state *State, game_input *input_to_playback){
+	size_t BytesRead = SDL_ReadIO(State->PlaybackHandle, input_to_playback, sizeof(*input_to_playback));
 
-	if(ReadFile(State->PlaybackHandle, input_to_playback, sizeof(*input_to_playback), &BytesRead, 0)){
-		if(BytesRead == 0)
-		{
-			//hit end of stream, go back to beginning
-			int playing_index = State->input_playing_index;
-			Win32EndInputPlayback(State);
-			Win32BeginInputPlayback(State, playing_index);
-			ReadFile(State->PlaybackHandle, input_to_playback, sizeof(*input_to_playback), &BytesRead, 0);
-		}
+	if(BytesRead == 0)
+	{
+		//hit end of stream, go back to beginning
+		int playing_index = State->input_playing_index;
+		SDLEndInputPlayback(State);
+		SDLBeginInputPlayback(State, playing_index);
+		SDL_ReadIO(State->PlaybackHandle, input_to_playback, sizeof(*input_to_playback));
 	}
 }
 
-#if HANDMADE_INTERNAL
-internal void
-Win32AllocDebugConsole(void)
-{
-	AllocConsole();
-	FILE *File;
-	freopen_s(&File, "CONOUT$", "w", stdout);
-}
-#endif
-
+//TODO add Windows/linux console
 
 internal SDL_Window *
 PlatformCreateWindow(const char *Title, int Width, int Height)
@@ -453,10 +418,6 @@ int main(int argc, char *argv[])
 	SDLBuildEXEPathFileName(&State, TempGameCodeDLLFileName,
 							   sizeof(TempGameCodeDLLFullPath), TempGameCodeDLLFullPath);
 
-#if HANDMADE_INTERNAL
-	Win32AllocDebugConsole();
-#endif
-
 	GlobalPerfCountFrequency = SDL_GetPerformanceFrequency();
 
 	//SDL INITIALIZATION
@@ -498,9 +459,9 @@ int main(int argc, char *argv[])
 
 	State.TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
 #if HANDMADE_INTERNAL
-LPVOID BaseAddress = (void *)Terabytes((uint64)2);
+void* BaseAddress = (void *)Terabytes((uint64)2);
 #else
-LPVOID BaseAdress = 0;
+void* BaseAddress = 0;
 #endif
 	State.GameMemoryBlock = PlatformAllocateMemory(BaseAddress, State.TotalSize);
 	GameMemory.PermanentStorage = State.GameMemoryBlock;
@@ -611,8 +572,8 @@ LPVOID BaseAdress = 0;
 			// Win32ProcessXInputStickValue / Win32ProcessXInputDigitalButton
 			// (rename Win32Process* if you want, logic is unchanged)
 
-			if (State.input_recording_index) { Win32RecordInput(&State, NewInput); }
-			if (State.input_playing_index)   { Win32PlaybackInput(&State, NewInput); }
+			if (State.input_recording_index) { SDLRecordInput(&State, NewInput); }
+			if (State.input_playing_index)   { SDLPlaybackInput(&State, NewInput); }
 
 			NewInput->dtForFrame = TargetSecondsPerFrame;
 
