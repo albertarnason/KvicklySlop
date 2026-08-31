@@ -634,8 +634,10 @@ LPVOID BaseAdress = 0;
 				// 3. Allocate temporary memory for this frame's audio chunks
 				SoundBuffer.Samples = SoundBuffer.Samples = AudioSampleScratchBuffer;
 				
-				// 4. CALL YOUR GAME LAYER API
-				// Pass your existing platform-tracked Thread and Memory pointers here
+				//clear scratchbuffer to make sure there is no garbage sound playing
+				SDL_memset(AudioSampleScratchBuffer, 0, BytesToWrite);
+
+				// 4. game engine call
 				Game.GetSoundSamples(&Thread, &GameMemory, &SoundBuffer);
 				
 				// 5. Submit the newly generated data to the SDL3 stream
