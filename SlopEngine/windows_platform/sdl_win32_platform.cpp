@@ -134,7 +134,7 @@ SDLGetEXEFileName(platform_state *State){
 internal void
 SDLBuildEXEPathFileName(platform_state *State, char *FileName, int DestCount, char *Dest)
 {
-		StringConcat(State->one_past_last_exe_file_name_slash - State->exe_file_name,State->exe_file_name, StringLength(FileName),  FileName, (size_t)DestCount, Dest);
+		StringConcat((size_t)(State->one_past_last_exe_file_name_slash - State->exe_file_name),State->exe_file_name, StringLength(FileName),  FileName, (size_t)DestCount, Dest);
 }
 
 internal SDL_Time
@@ -312,7 +312,7 @@ internal void SDLBeginInputPlayback(platform_state *State, int input_playing_ind
 		SDLGetInputFileLocation(State, true, input_playing_index, sizeof(filename), filename);
 		State->PlaybackHandle = SDL_IOFromFile(filename, "r");
 #if 1
-		SDL_SeekIO(State->RecordingHandle, State->TotalSize, SDL_IO_SEEK_SET);
+		SDL_SeekIO(State->RecordingHandle, (Sint64)State->TotalSize, SDL_IO_SEEK_SET);
 #endif
 		memcpy(State->GameMemoryBlock, replay_buffer->MemoryBlock, State->TotalSize);
 	}
@@ -596,7 +596,7 @@ void* BaseAddress = 0;
 				SoundBuffer.Samples = AudioSampleScratchBuffer;
 				
 				//clear scratchbuffer to make sure there is no garbage sound playing
-				SDL_memset(AudioSampleScratchBuffer, 0, BytesToWrite);
+				SDL_memset(AudioSampleScratchBuffer, 0, (size_t)BytesToWrite);
 
 				// 4. game engine call
 				Game.GetSoundSamples(&Thread, &GameMemory, &SoundBuffer);
