@@ -85,7 +85,17 @@ StringCopy(size_t SourceCount, const char *Source, size_t DestCount, char *Dest)
 	Dest[SourceCount] = 0;
 }
 
+inline uint64
+SDLGetWallClock(void)
+{
+	return SDL_GetPerformanceCounter();
+}
 
+inline real32
+SDLGetSecondsElapsed(uint64 Start, uint64 End)
+{
+	return (real32)(End - Start) / (real32)GlobalPerfCountFrequency;
+}
 
 internal void
 SDLGetEXEFileName(platform_state *State){
@@ -391,7 +401,14 @@ int main(int argc, char *argv[])
 	char TempGameCodeDLLFileName[] = "handmade_temp.dll";
 	SDLBuildEXEPathFileName(&State, TempGameCodeDLLFileName,
 							   sizeof(TempGameCodeDLLFullPath), TempGameCodeDLLFullPath);
+	
 
+#if defined(_WIN32)
+	uint32 DesiredSchedulerMS = 1;
+	bool32 SleepIsGranular = (timeBeginPeriod(DesiredSchedulerMS) == TIMERR_NOERROR);
+#else
+	bool32 SleepIsGranular = true; // Linux/macOS sleep is fine-grained by default
+#endif
 	GlobalPerfCountFrequency = SDL_GetPerformanceFrequency();
 
 	//SDL INITIALIZATION
@@ -451,11 +468,7 @@ void* BaseAddress = 0;
 
 	real32 GameUpdateHz = 30.0f;
 	real32 TargetSecondsPerFrame = 1.0f / GameUpdateHz;
-	uint64 frame_start;
-	uint64 frame_time;
-	uint64 frame_delay = (uint64)(1000.0f / GameUpdateHz);
-
-	uint64 LastCounter = SDL_GetPerformanceCounter();
+	uint64 LastCounter = SDLGetWallClock();
 
 	int BytesPerPixel = 4;
 	void *BackBufferMemory = PlatformAllocateMemory(0, (uint64)(window_width * window_height * BytesPerPixel));
@@ -506,8 +519,6 @@ void* BaseAddress = 0;
 				SDLUnloadGameCode(&Game);
 				Game = SDLLoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
 			}
-		frame_start = SDL_GetTicks();
-
 
 		game_controller_input *OldKeyboardController = GetController(OldInput, 0);
 		game_controller_input *NewKeyboardController = GetController(NewInput, 0);
@@ -572,11 +583,36 @@ void* BaseAddress = 0;
 
 			}
 					
-			frame_time = SDL_GetTicks() - frame_start;
+			// Frame pacing
+			uint64 WorkCounter = SDLGetWallClock();
+			real32 WorkSecondsElapsed = SDLGetSecondsElapsed(LastCounter, WorkCounter);
+			real32 SecondsElapsedForFrame = WorkSecondsElapsed;
 
-			if (frame_delay > frame_time) {
-				SDL_Delay((uint32)(frame_delay - frame_time)); // Sleep for remaining time
+			if (SecondsElapsedForFrame < TargetSecondsPerFrame)
+			{
+				if (SleepIsGranular)
+				{
+					uint32 SleepMS = (uint32)(1000.0f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
+					if (SleepMS > 0)
+					{
+						SDL_Delay(SleepMS);
+					}
+				}
+
+				// Spin the remainder — Delay/Sleep can overshoot or undershoot,
+				// so busy-wait to land exactly on the frame boundary.
+				while (SecondsElapsedForFrame < TargetSecondsPerFrame)
+				{
+					SecondsElapsedForFrame = SDLGetSecondsElapsed(LastCounter, SDLGetWallClock());
+				}
 			}
+			else
+			{
+				// TODO: missed frame — log this
+			}
+
+			uint64 EndCounter = SDLGetWallClock();
+			LastCounter = EndCounter;
 
 			game_input *Temp = NewInput;
 			NewInput = OldInput;
