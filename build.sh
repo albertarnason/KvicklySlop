@@ -25,7 +25,11 @@ else
   BUILD_FLAGS="$DEBUG_FLAGS"
 fi
 
-PLATFORM_FLAGS="-ldl $(pkg-config --cflags --libs sdl3)"
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+    PLATFORM_FLAGS="$(pkg-config --cflags --libs sdl3)"
+else
+    PLATFORM_FLAGS="-ldl $(pkg-config --cflags --libs sdl3)"
+fi
 
 ##############
 # Game layer #

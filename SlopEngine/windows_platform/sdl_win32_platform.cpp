@@ -81,22 +81,22 @@ struct platform_game_code
 
 global_variable bool GlobalRunning;
 global_variable bool GlobalPause;
-global_variable int64 GlobalPerfCountFrequency; // PORT: replace usage sites with SDL_GetPerformanceFrequency() - kept here only if you want a cached copy
+global_variable uint64 GlobalPerfCountFrequency;
 
 //ghetto string concatenation
 internal void StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB, size_t DestCount, char *Dest){
-	for (int index = 0; index < SourceACount; ++index){
+	for (size_t index = 0; index < SourceACount; ++index){
 		*Dest++ = *SourceA++;
 	}
-	for (int index = 0; index < SourceBCount; ++index){
+	for (size_t index = 0; index < SourceBCount; ++index){
 		*Dest++ = *SourceB++;
 	}
 	//TODO dest bounds checking
 	//cc strings end with null terminator
 	*Dest++ = 0;
 }
-internal int StringLength(const char *String){
-	int CharCount = 0;
+internal size_t StringLength(const char *String){
+	size_t CharCount = 0;
 	//if *String != 0 count, remember C strings are null terminated!
 	while(*String++){
 		++CharCount;
@@ -105,13 +105,13 @@ internal int StringLength(const char *String){
 }
 
 internal void
-StringCopy(int SourceCount, const char *Source, int DestCount, char *Dest)
+StringCopy(size_t SourceCount, const char *Source, size_t DestCount, char *Dest)
 {
 	// Assert instead of silently truncating - Handmade Hero convention
 	// so oversized paths get caught immediately in debug builds
 	Assert(SourceCount < DestCount);
 
-	for(int Index = 0; Index < SourceCount; ++Index)
+	for(size_t Index = 0; Index < SourceCount; ++Index)
 	{
 		Dest[Index] = Source[Index];
 	}
@@ -134,7 +134,7 @@ SDLGetEXEFileName(platform_state *State){
 internal void
 SDLBuildEXEPathFileName(platform_state *State, char *FileName, int DestCount, char *Dest)
 {
-		StringConcat(State->one_past_last_exe_file_name_slash - State->exe_file_name,State->exe_file_name, StringLength(FileName),  FileName, DestCount, Dest);
+		StringConcat(State->one_past_last_exe_file_name_slash - State->exe_file_name,State->exe_file_name, StringLength(FileName),  FileName, (size_t)DestCount, Dest);
 }
 
 internal SDL_Time
@@ -275,14 +275,14 @@ SDLGetInputFileLocation(platform_state *State, bool32 InputStream, int SlotIndex
 }
 
 internal platform_replay_buffer *
-SDLGetReplayBuffer(platform_state *State, unsigned int Index)
+SDLGetReplayBuffer(platform_state *State, uint32 Index)
 {
 	Assert(Index < ArrayCount(State->ReplayBuffers));
 	return &State->ReplayBuffers[Index];
 }
 
 internal void SDLBeginRecordingInput(platform_state *State, int input_recording_index){
-	platform_replay_buffer *replay_buffer = SDLGetReplayBuffer(State, input_recording_index);
+	platform_replay_buffer *replay_buffer = SDLGetReplayBuffer(State, (uint32)input_recording_index);
 	if(replay_buffer->MemoryBlock){
 		State->input_recording_index = input_recording_index;
 
@@ -304,7 +304,7 @@ internal void SDLEndRecordingInput(platform_state *State){
 }
 
 internal void SDLBeginInputPlayback(platform_state *State, int input_playing_index){
-	platform_replay_buffer *replay_buffer = SDLGetReplayBuffer(State, input_playing_index);
+	platform_replay_buffer *replay_buffer = SDLGetReplayBuffer(State, (uint32)input_playing_index);
 	if(replay_buffer->MemoryBlock){
 		State->input_playing_index =  input_playing_index;
 				
@@ -524,12 +524,12 @@ void* BaseAddress = 0;
 
 	real32 AudioBufferDuration = TargetSecondsPerFrame * 3.0f;
 
-	int BytesPerSample = spec.channels * sizeof(int16);
+	int BytesPerSample = spec.channels * (int)sizeof(int16);
 	uint32 TargetQueueBytes = (uint32)((real32)spec.freq * AudioBufferDuration * (real32)BytesPerSample);
-    int CurrentlyQueuedBytes = SDL_GetAudioStreamQueued(audio_stream);
+    uint32 CurrentlyQueuedBytes = (uint32)SDL_GetAudioStreamQueued(audio_stream);
     
     int32 BytesToWrite = (int32)TargetQueueBytes - (int32)CurrentlyQueuedBytes;
-	int BytesPerStereoSample = spec.channels * sizeof(int16); // 2 channels * 2 bytes = 4 bytes
+	int BytesPerStereoSample = spec.channels * (int)sizeof(int16); // 2 channels * 2 bytes = 4 bytes
 	int16 *AudioSampleScratchBuffer = (int16 *)SDL_malloc(TargetQueueBytes);
 
 	GlobalRunning = true;
@@ -548,7 +548,7 @@ void* BaseAddress = 0;
 		game_controller_input *NewKeyboardController = GetController(NewInput, 0);
 		*NewKeyboardController = {};
 		NewKeyboardController->IsConnected = true;
-		for (int ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
+		for (uint64 ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
 		{
 			NewKeyboardController->Buttons[ButtonIndex].EndedDown =
 				OldKeyboardController->Buttons[ButtonIndex].EndedDown;
@@ -586,14 +586,14 @@ void* BaseAddress = 0;
 			SDL_RenderPresent(Renderer);
 
 
-			CurrentlyQueuedBytes = SDL_GetAudioStreamQueued(audio_stream);
-			BytesToWrite = TargetQueueBytes - CurrentlyQueuedBytes;
+			CurrentlyQueuedBytes = (uint32)SDL_GetAudioStreamQueued(audio_stream);
+			BytesToWrite = (int32)TargetQueueBytes - (int32)CurrentlyQueuedBytes;
 			 if (BytesToWrite > 0) {
 				
 				SoundBuffer.SampleCount = (int32)(BytesToWrite / BytesPerStereoSample);
 				
 				// 3. Allocate temporary memory for this frame's audio chunks
-				SoundBuffer.Samples = SoundBuffer.Samples = AudioSampleScratchBuffer;
+				SoundBuffer.Samples = AudioSampleScratchBuffer;
 				
 				//clear scratchbuffer to make sure there is no garbage sound playing
 				SDL_memset(AudioSampleScratchBuffer, 0, BytesToWrite);
