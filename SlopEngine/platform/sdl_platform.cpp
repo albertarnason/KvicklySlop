@@ -223,10 +223,6 @@ internal void SDLBeginRecordingInput(platform_state *State, int input_recording_
 		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
 		SDLGetInputFileLocation(State, true, input_recording_index, sizeof(filename), filename);
 		State->RecordingHandle = SDL_IOFromFile(filename, "w");
-		
-#if 0
-		SDL_SeekIO(State->RecordingHandle, State->TotalSize, SDL_IO_SEEK_SET);
-#endif
 		memcpy(replay_buffer->MemoryBlock, State->GameMemoryBlock, State->TotalSize);
 	}
 }
@@ -234,6 +230,7 @@ internal void SDLBeginRecordingInput(platform_state *State, int input_recording_
 
 internal void SDLEndRecordingInput(platform_state *State){
 	SDL_CloseIO(State->RecordingHandle);
+	State->RecordingHandle = 0;
 	State->input_recording_index = 0;
 }
 
@@ -245,15 +242,13 @@ internal void SDLBeginInputPlayback(platform_state *State, int input_playing_ind
 		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
 		SDLGetInputFileLocation(State, true, input_playing_index, sizeof(filename), filename);
 		State->PlaybackHandle = SDL_IOFromFile(filename, "r");
-#if 1
-		SDL_SeekIO(State->RecordingHandle, (Sint64)State->TotalSize, SDL_IO_SEEK_SET);
-#endif
 		memcpy(State->GameMemoryBlock, replay_buffer->MemoryBlock, State->TotalSize);
 	}
 }
 
 internal void SDLEndInputPlayback(platform_state *State){
 	SDL_CloseIO(State->PlaybackHandle);
+	State->PlaybackHandle = 0;
 	State->input_playing_index = 0;
 }
 
@@ -440,6 +435,13 @@ void* BaseAddress = 0;
 	State.GameMemoryBlock = PlatformAllocateMemory(BaseAddress, State.TotalSize);
 	GameMemory.PermanentStorage = State.GameMemoryBlock;
 	GameMemory.TransientStorage = ((uint8 *)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);
+
+	// NEW: allocate a snapshot buffer for each replay slot
+	for (uint64 ReplayIndex = 0; ReplayIndex < ArrayCount(State.ReplayBuffers); ++ReplayIndex)
+	{
+		platform_replay_buffer *ReplayBuffer = &State.ReplayBuffers[ReplayIndex];
+		ReplayBuffer->MemoryBlock = PlatformAllocateMemory(0, State.TotalSize);
+	}
 
 	platform_game_code Game = SDLLoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
 
