@@ -1,7 +1,7 @@
 /*
 	sdl_win32_platform.cpp
 
-	SDL3 platform layer - WINDOWS specific compilation unit.
+	SDL3 platform layer 
 
 	This is a SKELETON. Function bodies marked with PORT: are where you move
 	logic over from win32_handmade.cpp. Function bodies marked with NEW: are
