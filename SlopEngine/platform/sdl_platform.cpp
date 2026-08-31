@@ -230,7 +230,7 @@ internal void SDLBeginRecordingInput(platform_state *State, int input_recording_
 
 		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
 		SDLGetInputFileLocation(State, true, input_recording_index, sizeof(filename), filename);
-		State->RecordingHandle = SDL_IOFromFile(filename, "w");
+		State->RecordingHandle = SDL_IOFromFile(filename, "wb");
 		memcpy(replay_buffer->MemoryBlock, State->GameMemoryBlock, State->TotalSize);
 	}
 }
@@ -249,7 +249,7 @@ internal void SDLBeginInputPlayback(platform_state *State, int input_playing_ind
 				
 		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
 		SDLGetInputFileLocation(State, true, input_playing_index, sizeof(filename), filename);
-		State->PlaybackHandle = SDL_IOFromFile(filename, "r");
+		State->PlaybackHandle = SDL_IOFromFile(filename, "rb");
 		memcpy(State->GameMemoryBlock, replay_buffer->MemoryBlock, State->TotalSize);
 	}
 }
@@ -457,6 +457,8 @@ void* BaseAddress = 0;
 		platform_replay_buffer *ReplayBuffer = &State.ReplayBuffers[ReplayIndex];
 		ReplayBuffer->MemoryBlock = PlatformAllocateMemory(0, State.TotalSize);
 	}
+	//Consideration: Currently doesn't persist loop memory to disk, will need some more linux specific stuff
+	//to make it work on both platforms
 
 	platform_game_code Game = SDLLoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
 
