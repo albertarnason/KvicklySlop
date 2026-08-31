@@ -523,19 +523,20 @@ void* BaseAddress = 0;
 
 		if (!GlobalPause)
 		{
-			// NEW: mouse state via SDL_GetMouseState(&x, &y) - already window-
-			// relative, no ScreenToClient step needed.
-			float MouseX, MouseY;
+
+			real32 MouseX, MouseY;
 			SDL_MouseButtonFlags MouseButtons = SDL_GetMouseState(&MouseX, &MouseY);
 			NewInput->MouseX = (int)MouseX;
 			NewInput->MouseY = (int)MouseY;
 			NewInput->MouseZ = 0;
-			// TODO: Win32ProcessKeyboardMessage(&NewInput->MouseButtons[0], MouseButtons & SDL_BUTTON_LMASK); etc.
-
+			SDLProcessKeyboardMessage(&NewInput->MouseButtons[0], MouseButtons & SDL_BUTTON_LMASK);
+			SDLProcessKeyboardMessage(&NewInput->MouseButtons[1], MouseButtons & SDL_BUTTON_RMASK);
+			SDLProcessKeyboardMessage(&NewInput->MouseButtons[2], MouseButtons & SDL_BUTTON_MMASK);
+			SDLProcessKeyboardMessage(&NewInput->MouseButtons[3], MouseButtons & SDL_BUTTON_X1MASK);
+			SDLProcessKeyboardMessage(&NewInput->MouseButtons[4], MouseButtons & SDL_BUTTON_X2MASK);
+			
 			// TODO: gamepad polling loop using SDL_GetGamepadAxis /
 			// SDL_GetGamepadButton, feeding your existing
-			// Win32ProcessXInputStickValue / Win32ProcessXInputDigitalButton
-			// (rename Win32Process* if you want, logic is unchanged)
 
 			if (State.input_recording_index) { SDLRecordInput(&State, NewInput); }
 			if (State.input_playing_index)   { SDLPlaybackInput(&State, NewInput); }
