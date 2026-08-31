@@ -85,7 +85,17 @@ StringCopy(size_t SourceCount, const char *Source, size_t DestCount, char *Dest)
 	Dest[SourceCount] = 0;
 }
 
+inline uint64
+SDLGetWallClock(void)
+{
+	return SDL_GetPerformanceCounter();
+}
 
+inline real32
+SDLGetSecondsElapsed(uint64 Start, uint64 End)
+{
+	return (real32)(End - Start) / (real32)GlobalPerfCountFrequency;
+}
 
 internal void
 SDLGetEXEFileName(platform_state *State){
@@ -223,10 +233,6 @@ internal void SDLBeginRecordingInput(platform_state *State, int input_recording_
 		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
 		SDLGetInputFileLocation(State, true, input_recording_index, sizeof(filename), filename);
 		State->RecordingHandle = SDL_IOFromFile(filename, "w");
-		
-#if 0
-		SDL_SeekIO(State->RecordingHandle, State->TotalSize, SDL_IO_SEEK_SET);
-#endif
 		memcpy(replay_buffer->MemoryBlock, State->GameMemoryBlock, State->TotalSize);
 	}
 }
@@ -234,6 +240,7 @@ internal void SDLBeginRecordingInput(platform_state *State, int input_recording_
 
 internal void SDLEndRecordingInput(platform_state *State){
 	SDL_CloseIO(State->RecordingHandle);
+	State->RecordingHandle = 0;
 	State->input_recording_index = 0;
 }
 
@@ -245,15 +252,13 @@ internal void SDLBeginInputPlayback(platform_state *State, int input_playing_ind
 		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
 		SDLGetInputFileLocation(State, true, input_playing_index, sizeof(filename), filename);
 		State->PlaybackHandle = SDL_IOFromFile(filename, "r");
-#if 1
-		SDL_SeekIO(State->RecordingHandle, (Sint64)State->TotalSize, SDL_IO_SEEK_SET);
-#endif
 		memcpy(State->GameMemoryBlock, replay_buffer->MemoryBlock, State->TotalSize);
 	}
 }
 
 internal void SDLEndInputPlayback(platform_state *State){
 	SDL_CloseIO(State->PlaybackHandle);
+	State->PlaybackHandle = 0;
 	State->input_playing_index = 0;
 }
 
@@ -299,6 +304,13 @@ PlatformCreateWindow(const char *Title, int Width, int Height)
 	// (VKCode == 'L' / 'P' in the original) port over as
 	// SDL_SCANCODE_L / SDL_SCANCODE_P checks in this same switch.
 
+internal void SDLProcessKeyboardMessage(game_button_state *NewState, bool32 IsDown){
+	if(NewState->EndedDown != IsDown){
+		NewState->EndedDown = IsDown;
+		++NewState->HalfTransitionCount;
+	}
+}
+
 internal void
 PlatformProcessPendingEvents(platform_state *State, game_controller_input *KeyboardController)
 {
@@ -322,10 +334,47 @@ PlatformProcessPendingEvents(platform_state *State, game_controller_input *Keybo
 				// e.g.:
 				// if (Event.key.scancode == SDL_SCANCODE_W)
 				//     Win32ProcessKeyboardMessage(&KeyboardController->MoveUp, IsDown);
-
-				if (Event.key.scancode == SDL_SCANCODE_ESCAPE && IsDown)
+				if (WasDown != IsDown)
 				{
-					GlobalRunning = false;
+					if      (Event.key.scancode == SDL_SCANCODE_W)        { SDLProcessKeyboardMessage(&KeyboardController->MoveUp, 	     IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_A)        { SDLProcessKeyboardMessage(&KeyboardController->MoveLeft, 	 IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_S)        { SDLProcessKeyboardMessage(&KeyboardController->MoveDown, 	 IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_D)        { SDLProcessKeyboardMessage(&KeyboardController->MoveRight,    IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_Q)        { SDLProcessKeyboardMessage(&KeyboardController->LeftShoulder, IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_E)        { SDLProcessKeyboardMessage(&KeyboardController->RightShoulder,IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_UP)       { SDLProcessKeyboardMessage(&KeyboardController->ActionUp,     IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_DOWN)     { SDLProcessKeyboardMessage(&KeyboardController->ActionDown,   IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_LEFT)     { SDLProcessKeyboardMessage(&KeyboardController->ActionLeft, 	 IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_RIGHT)    { SDLProcessKeyboardMessage(&KeyboardController->ActionRight,  IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_SPACE)    { SDLProcessKeyboardMessage(&KeyboardController->Back, 	     IsDown);}
+					else if (Event.key.scancode == SDL_SCANCODE_ESCAPE)   { SDLProcessKeyboardMessage(&KeyboardController->Start, 	     IsDown);}
+					//loop mode
+					else if (Event.key.scancode == SDL_SCANCODE_L){
+						if(IsDown){
+							if(State->input_playing_index == 0){
+
+								if(State->input_recording_index == 0){
+									SDLBeginRecordingInput(State, 1);
+								}
+								else{
+									SDLEndRecordingInput(State);
+									SDLBeginInputPlayback(State, 1);
+								}
+							}
+							else{
+								SDLEndInputPlayback(State);
+							}
+						}
+					}
+				}
+				if (Event.key.scancode == SDL_SCANCODE_P && IsDown)
+				{
+					if(GlobalPause){
+						GlobalPause = false;
+					}
+					else{
+						GlobalPause = true;
+					}
 				}
 			} break;
 
@@ -336,6 +385,7 @@ PlatformProcessPendingEvents(platform_state *State, game_controller_input *Keybo
 		}
 	}
 }
+
 
 int main(int argc, char *argv[])
 {
@@ -351,7 +401,14 @@ int main(int argc, char *argv[])
 	char TempGameCodeDLLFileName[] = "handmade_temp.dll";
 	SDLBuildEXEPathFileName(&State, TempGameCodeDLLFileName,
 							   sizeof(TempGameCodeDLLFullPath), TempGameCodeDLLFullPath);
+	
 
+#if defined(_WIN32)
+	uint32 DesiredSchedulerMS = 1;
+	bool32 SleepIsGranular = (timeBeginPeriod(DesiredSchedulerMS) == TIMERR_NOERROR);
+#else
+	bool32 SleepIsGranular = true; // Linux/macOS sleep is fine-grained by default
+#endif
 	GlobalPerfCountFrequency = SDL_GetPerformanceFrequency();
 
 	//SDL INITIALIZATION
@@ -396,6 +453,13 @@ void* BaseAddress = 0;
 	GameMemory.PermanentStorage = State.GameMemoryBlock;
 	GameMemory.TransientStorage = ((uint8 *)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);
 
+	// NEW: allocate a snapshot buffer for each replay slot
+	for (uint64 ReplayIndex = 0; ReplayIndex < ArrayCount(State.ReplayBuffers); ++ReplayIndex)
+	{
+		platform_replay_buffer *ReplayBuffer = &State.ReplayBuffers[ReplayIndex];
+		ReplayBuffer->MemoryBlock = PlatformAllocateMemory(0, State.TotalSize);
+	}
+
 	platform_game_code Game = SDLLoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
 
 	game_input Input[2] = {};
@@ -404,11 +468,7 @@ void* BaseAddress = 0;
 
 	real32 GameUpdateHz = 30.0f;
 	real32 TargetSecondsPerFrame = 1.0f / GameUpdateHz;
-	uint64 frame_start;
-	uint64 frame_time;
-	uint64 frame_delay = (uint64)(1000.0f / GameUpdateHz);
-
-	uint64 LastCounter = SDL_GetPerformanceCounter();
+	uint64 LastCounter = SDLGetWallClock();
 
 	int BytesPerPixel = 4;
 	void *BackBufferMemory = PlatformAllocateMemory(0, (uint64)(window_width * window_height * BytesPerPixel));
@@ -459,8 +519,6 @@ void* BaseAddress = 0;
 				SDLUnloadGameCode(&Game);
 				Game = SDLLoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
 			}
-		frame_start = SDL_GetTicks();
-
 
 		game_controller_input *OldKeyboardController = GetController(OldInput, 0);
 		game_controller_input *NewKeyboardController = GetController(NewInput, 0);
@@ -476,19 +534,20 @@ void* BaseAddress = 0;
 
 		if (!GlobalPause)
 		{
-			// NEW: mouse state via SDL_GetMouseState(&x, &y) - already window-
-			// relative, no ScreenToClient step needed.
-			float MouseX, MouseY;
+
+			real32 MouseX, MouseY;
 			SDL_MouseButtonFlags MouseButtons = SDL_GetMouseState(&MouseX, &MouseY);
 			NewInput->MouseX = (int)MouseX;
 			NewInput->MouseY = (int)MouseY;
 			NewInput->MouseZ = 0;
-			// TODO: Win32ProcessKeyboardMessage(&NewInput->MouseButtons[0], MouseButtons & SDL_BUTTON_LMASK); etc.
-
+			SDLProcessKeyboardMessage(&NewInput->MouseButtons[0], MouseButtons & SDL_BUTTON_LMASK);
+			SDLProcessKeyboardMessage(&NewInput->MouseButtons[1], MouseButtons & SDL_BUTTON_RMASK);
+			SDLProcessKeyboardMessage(&NewInput->MouseButtons[2], MouseButtons & SDL_BUTTON_MMASK);
+			SDLProcessKeyboardMessage(&NewInput->MouseButtons[3], MouseButtons & SDL_BUTTON_X1MASK);
+			SDLProcessKeyboardMessage(&NewInput->MouseButtons[4], MouseButtons & SDL_BUTTON_X2MASK);
+			
 			// TODO: gamepad polling loop using SDL_GetGamepadAxis /
 			// SDL_GetGamepadButton, feeding your existing
-			// Win32ProcessXInputStickValue / Win32ProcessXInputDigitalButton
-			// (rename Win32Process* if you want, logic is unchanged)
 
 			if (State.input_recording_index) { SDLRecordInput(&State, NewInput); }
 			if (State.input_playing_index)   { SDLPlaybackInput(&State, NewInput); }
@@ -524,11 +583,36 @@ void* BaseAddress = 0;
 
 			}
 					
-			frame_time = SDL_GetTicks() - frame_start;
+			// Frame pacing, cpu melting solution of sleeping
+			uint64 WorkCounter = SDLGetWallClock();
+			real32 WorkSecondsElapsed = SDLGetSecondsElapsed(LastCounter, WorkCounter);
+			real32 SecondsElapsedForFrame = WorkSecondsElapsed;
 
-			if (frame_delay > frame_time) {
-				SDL_Delay((uint32)(frame_delay - frame_time)); // Sleep for remaining time
+			if (SecondsElapsedForFrame < TargetSecondsPerFrame)
+			{
+				if (SleepIsGranular)
+				{
+					uint32 SleepMS = (uint32)(1000.0f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
+					if (SleepMS > 0)
+					{
+						SDL_Delay(SleepMS);
+					}
+				}
+
+				// Spin the remainder — Delay/Sleep can overshoot or undershoot,
+				// so busy-wait to land exactly on the frame boundary.
+				while (SecondsElapsedForFrame < TargetSecondsPerFrame)
+				{
+					SecondsElapsedForFrame = SDLGetSecondsElapsed(LastCounter, SDLGetWallClock());
+				}
 			}
+			else
+			{
+				// TODO: missed frame — log this
+			}
+
+			uint64 EndCounter = SDLGetWallClock();
+			LastCounter = EndCounter;
 
 			game_input *Temp = NewInput;
 			NewInput = OldInput;
