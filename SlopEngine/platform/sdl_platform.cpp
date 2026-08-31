@@ -1,4 +1,4 @@
-#define SDL__MAIN_USE_CALLBACKS 0
+#define SDL_MAIN_USE_CALLBACKS 0
 #include <SDL3/SDL.h>
 #include "handmade.h"
 
@@ -15,8 +15,6 @@
 
 struct platform_replay_buffer
 {
-	void* FileHandle;
-	void* MemoryMap;
 	char   Filename[PLATFORM_STATE_FILE_NAME_COUNT];
 	void  *MemoryBlock;
 };
@@ -33,7 +31,7 @@ struct platform_state
 	int input_playing_index;
 
 	char exe_file_name[PLATFORM_STATE_FILE_NAME_COUNT];
-	char *one_past_last_exe_file_name_slash;
+	char *one_past_last_exe_file_name_slash; //win32 era leftover
 };
 
 struct platform_game_code
