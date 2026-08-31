@@ -21,7 +21,9 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 			if(GameState->tSine > 2.0f*Pi32){
 				GameState->tSine -= 2.0f*Pi32;
 			}
-			
+#else
+
+		int16 SampleValue = 0;
 #endif
 
 	}

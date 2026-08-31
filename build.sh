@@ -25,7 +25,11 @@ else
   BUILD_FLAGS="$DEBUG_FLAGS"
 fi
 
-PLATFORM_FLAGS="-ldl $(pkg-config --cflags --libs sdl3)"
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+    PLATFORM_FLAGS="$(pkg-config --cflags --libs sdl3)"
+else
+    PLATFORM_FLAGS="-ldl $(pkg-config --cflags --libs sdl3)"
+fi
 
 ##############
 # Game layer #
@@ -37,5 +41,5 @@ g++ SlopEngine/engine/handmade.cpp -o build/libhandmade.so -shared -fPIC $COMMON
 # Platform layer #
 ##################
 
-g++ SlopEngine/linux_platform/sdl_linux_platform.cpp -o build/handmade $COMMON_FLAGS $BUILD_FLAGS $PLATFORM_FLAGS
+g++ SlopEngine/windows_platform/sdl_win32_platform.cpp -o build/handmade $COMMON_FLAGS $BUILD_FLAGS $PLATFORM_FLAGS
 

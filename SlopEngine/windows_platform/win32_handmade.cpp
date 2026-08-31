@@ -158,7 +158,8 @@ if(FileHandle != INVALID_HANDLE_VALUE)
 			}
 			else
 			{
-				DEBUGPlatformFreeFileMemory(Thread, Result.Contents);Result.Contents = 0;
+				uint64 Size = 0;
+				DEBUGPlatformFreeFileMemory(Thread, Result.Contents, Size);Result.Contents = 0;
 			}
 		}
 		else
