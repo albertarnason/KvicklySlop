@@ -1,33 +1,3 @@
-/*
-	sdl_win32_platform.cpp
-
-	SDL3 platform layer 
-
-	This is a SKELETON. Function bodies marked with PORT: are where you move
-	logic over from win32_handmade.cpp. Function bodies marked with NEW: are
-	new for the SDL model and have no 1:1 Win32 equivalent - write these from
-	scratch (guidance in comments).
-
-	Build alongside sdl_platform_shared.cpp (event loop / main loop, shared
-	between win32 and linux) and sdl_linux_platform.cpp (not this file).
-	This file should only contain things SDL does NOT abstract:
-		- exe path
-		- virtual memory reservation
-		- memory-mapped replay files
-		- raw file IO
-		- file last-write-time (DLL hot reload)
-		- DLL load/unload
-		- scheduler granularity (timeBeginPeriod)
-		- win32 console allocation for debug builds
-
-	TODO before this compiles:
-	- confirm SDL3 is actually the API you're linking (SDL_Gamepad, not
-	  SDL_GameController - SDL3 renamed the controller API)
-	- fill in handmade.h include path
-	- decide int types (uint8/16/32/64, real32/64) - assumed same as your
-	  existing handmade.h typedefs
-*/
-
 #define SDL__MAIN_USE_CALLBACKS 0
 #include <SDL3/SDL.h>
 #include "handmade.h"
@@ -39,10 +9,6 @@
 #endif
 
 #include <stdio.h>
-
-// ---------------------------------------------------------------------------
-// Platform-specific state (Windows side of the split)
-// ---------------------------------------------------------------------------
 
 //max path
 #define PLATFORM_STATE_FILE_NAME_COUNT 260
@@ -107,7 +73,7 @@ internal size_t StringLength(const char *String){
 internal void
 StringCopy(size_t SourceCount, const char *Source, size_t DestCount, char *Dest)
 {
-	// Assert instead of silently truncating - Handmade Hero convention
+	// Assert instead of silently truncating
 	// so oversized paths get caught immediately in debug builds
 	Assert(SourceCount < DestCount);
 
@@ -151,19 +117,6 @@ SDLGetLastFileWriteTime(char *FileName)
 	return LastWriteTime;
 }
 
-
-
-// ---------------------------------------------------------------------------
-// File last-write-time + DLL hot reload
-// PORT: Win32GetLastFileWriteTime unchanged.
-// PORT: Win32LoadGameCode / Win32UnloadGameCode unchanged (LoadLibraryA/
-//       GetProcAddress/FreeLibrary all still valid Win32 calls under SDL).
-//       Optionally replace with SDL_LoadObject/SDL_LoadFunction/SDL_UnloadObject
-//       if you want fewer #ifdefs later - functionally equivalent here.
-// ---------------------------------------------------------------------------
-
-
-
 internal platform_game_code SDLLoadGameCode (char *SourceDLLName, char *TempDLLName){
 	platform_game_code Result = {};
 	Result.LastWriteTimeDLL = SDLGetLastFileWriteTime(SourceDLLName);
@@ -196,14 +149,6 @@ SDLUnloadGameCode(platform_game_code *GameCode)
 	GameCode->GetSoundSamples     = 0;
 	GameCode->UpdateAndRender     = 0;
 }
-
-
-// ---------------------------------------------------------------------------
-// Virtual memory reservation
-// PORT: VirtualAlloc/VirtualFree call sites for GameMemoryBlock and any
-//       debug base-address (Terabytes(2)) trick carry over unchanged - this
-//       is Windows-only code, no SDL equivalent exists.
-// ---------------------------------------------------------------------------
 
 internal void *
 PlatformAllocateMemory(void *BaseAddress, uint64 Size)
@@ -254,17 +199,6 @@ DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemory){
 		SDL_free(Memory);
 	}
 }
-
-
-// ---------------------------------------------------------------------------
-// Memory-mapped replay/loop-recording buffers
-// PORT: Win32GetInputFileLocation / Win32GetReplayBuffer unchanged (just
-//       renamed win32_state -> platform_state, win32_replay_buffer ->
-//       platform_replay_buffer).
-// PORT: replay buffer setup (CreateFileMappingA / MapViewOfFile) unchanged -
-//       this is the exact code that had the max_size_high/low bug, so
-//       double check that HighPart/LowPart assignment when you port it.
-// ---------------------------------------------------------------------------
 
 internal void
 SDLGetInputFileLocation(platform_state *State, bool32 InputStream, int SlotIndex, int DestCount, char *Dest)
@@ -436,17 +370,12 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	// NEW: renderer + streaming texture replaces win32_offscreen_buffer +
-	// StretchDIBits. Create once here, recreate texture on resize.
 	SDL_Renderer *Renderer = SDL_CreateRenderer(Window, 0);
 	SDL_Texture *BackBufferTexture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, window_width, window_height);
 	SDL_SetTextureBlendMode(BackBufferTexture, SDL_BLENDMODE_NONE);
 
 
-
-	// NEW: gamepad open replaces Win32LoadXInpuT. Enumerate with
-	// SDL_GetGamepads() / SDL_OpenGamepad() instead of a fixed XUSER_MAX_COUNT
-	// loop over XInputGetState.
+	// SDL_GetGamepads() / SDL_OpenGamepad()
 
 	thread_context Thread = {};
 
@@ -466,9 +395,6 @@ void* BaseAddress = 0;
 	State.GameMemoryBlock = PlatformAllocateMemory(BaseAddress, State.TotalSize);
 	GameMemory.PermanentStorage = State.GameMemoryBlock;
 	GameMemory.TransientStorage = ((uint8 *)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);
-
-	// TODO: replay buffer setup loop (CreateFileMappingA/MapViewOfFile),
-	// ported from the ArrayCount(State.ReplayBuffers) loop in WinMain.
 
 	platform_game_code Game = SDLLoadGameCode(SourceGameCodeDLLFullPath, TempGameCodeDLLFullPath);
 
@@ -496,14 +422,6 @@ void* BaseAddress = 0;
 	Buffer.Pitch         = window_width * BytesPerPixel;
 	Buffer.BytesPerPixel = BytesPerPixel;
 	
-	
-	// NEW: audio device setup replaces Win32InitDSound. SDL3 audio is stream-
-	// based: SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
-	// &spec, callback, userdata) or SDL_PutAudioStreamData if you want to push
-	// samples explicitly each frame like your current DirectSound loop does.
-	// This does NOT port 1:1 - the PlayCursor/WriteCursor prediction math in
-	// your current WinMain (audio_card_is_low_latency etc.) has no equivalent
-	// concept in SDL's audio stream model and should be redesigned, not moved.
 	SDL_AudioSpec spec = {
     SDL_AUDIO_S16LE, // format
     2,               // channels
