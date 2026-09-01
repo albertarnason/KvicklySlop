@@ -256,16 +256,16 @@ struct coordinate{
 struct mesh_face
 {
 	int32 vertex_index[4];
-	int32 vertex_count;
+	uint32 vertex_count;
 };
 
 struct mesh
 {
 	coordinate *vertices;
-	int32       vertex_count;
+	uint32       vertex_count;
 
 	mesh_face  *faces;
-	int32       face_count;
+	uint32       face_count;
 };
 
 #define MAX_ENTITIES 1024

@@ -371,10 +371,10 @@ internal int32 parse_face_vertex_reference(char **current_position_pointer, char
 	return one_based_vertex_index - 1; // OBJ indices are 1-based
 }
 
-internal void count_obj_lines(char *file_data, size_t file_data_size, int32 *out_vertex_count, int32 *out_face_count)
+internal void count_obj_lines(char *file_data, size_t file_data_size, uint32 *out_vertex_count, uint32 *out_face_count)
 {
-	int32 vertex_count = 0;
-	int32 face_count   = 0;
+	uint32 vertex_count = 0;
+	uint32 face_count   = 0;
 
 	char *current_position = file_data;
 	char *file_end         = file_data + file_data_size;
@@ -415,8 +415,8 @@ internal void parse_obj_into_mesh(memory_arena *arena, char *file_data, size_t f
 	Assert(file_data);
 	Assert(file_data_size > 0);
 	// ---- PASS 1: count vertices and faces so the arena allocation is exact ----
-	int32 total_vertex_count = 0;
-	int32 total_face_count   = 0;
+	uint32 total_vertex_count = 0;
+	uint32 total_face_count   = 0;
 	count_obj_lines(file_data, file_data_size, &total_vertex_count, &total_face_count);
 
 	output_mesh->vertices     = (coordinate *)ArenaPush(arena, sizeof(coordinate) * total_vertex_count);
@@ -556,7 +556,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	real32 camera_z = 3.0f;
 	
 	
-	for(int32 vertex_index = 0; vertex_index < GameState->Mesh.vertex_count; ++vertex_index)
+	for(uint32 vertex_index = 0; vertex_index < GameState->Mesh.vertex_count; ++vertex_index)
 	{
 		coordinate *source_vertex = &GameState->Mesh.vertices[vertex_index];
 		coordinate rotated = rotate(source_vertex->x, source_vertex->y, source_vertex->z, GameState->timer);
@@ -568,10 +568,10 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		screen_points[vertex_index] = screen_point;
 	}
 		
-	for(int32 face_index = 0; face_index < GameState->Mesh.face_count; ++face_index)
+	for(uint32 face_index = 0; face_index < GameState->Mesh.face_count; ++face_index)
 	{
 		mesh_face *face = &GameState->Mesh.faces[face_index];
-		for(int32 v = 0; v < face->vertex_count; ++v)
+		for(uint32 v = 0; v < face->vertex_count; ++v)
 		{
 			int32 a = face->vertex_index[v];
 			int32 b = face->vertex_index[(v + 1) % face->vertex_count];
