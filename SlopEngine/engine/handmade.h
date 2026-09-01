@@ -14,6 +14,7 @@
 //max path
 #define FILE_NAME_COUNT 260
 
+
 /*
 HANDMADE_INTERNAL:
 0 - build for public
@@ -223,17 +224,6 @@ StringCopy(size_t SourceCount, const char *Source, size_t DestCount, char *Dest)
 	Dest[SourceCount] = 0;
 }
 
-struct entity{
-    real32 X;
-    real32 Y;
-    real32 Z;
-    real32 Width;
-    real32 Height;
-    uint32 Color;
-    real32 VelocityX;
-    real32 VelocityY;
-    bool32 IsActive;
-};
 
 
 struct memory_arena{
@@ -248,10 +238,14 @@ struct temporary_memory{
 };
 
 struct coordinate{
-	real32 x;
+    real32 x;
 	real32 y;
     real32 z;
 };
+
+
+//max meshes
+#define MAX_MESHES 16
 
 struct mesh_face
 {
@@ -261,26 +255,36 @@ struct mesh_face
 
 struct mesh
 {
-	coordinate *vertices;
+    coordinate *vertices;
 	uint32       vertex_count;
-
+    
 	mesh_face  *faces;
 	uint32       face_count;
 };
 
 #define MAX_ENTITIES 1024
 
+struct entity{
+    coordinate position;
+    mesh *entity_mesh;
+    uint32 color;
+
+    bool32 IsActive;
+};
+
 struct game_state{
-    int EntityCount;
+    uint32 EntityCount;
     entity Entities[MAX_ENTITIES];
 
+    uint32 MeshCount;
+    mesh Meshes[MAX_MESHES];
+    
     real32 timer;
     coordinate coordinates;
 
     //only used for sound example
     real32 tSine;
 
-    mesh Mesh;
     //arena is important
     memory_arena Arena;
 };

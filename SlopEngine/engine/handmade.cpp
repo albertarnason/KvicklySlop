@@ -11,7 +11,7 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 
 	for (int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex){
 //sound flag for debug sound
-#if 1	
+#if 0	
 			real32 SineValue = sinf(GameState->tSine);
 			int16 SampleValue = (int16)(SineValue * ToneVolume);
 			*SampleOut++ = SampleValue;
@@ -282,16 +282,14 @@ internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordi
     }
 }
 
-internal void SpawnEntity(game_state *GameState, real32 X, real32 Y, uint32 color){
-		entity *E = &GameState->Entities[GameState->EntityCount++];
-		E->X         = X;
-		E->Y         = Y;
-		E->Width     = 50.0f;
-		E->Height    = 50.0f;
-		E->Color     = color;
-		E->VelocityX = 100.0f;
-		E->VelocityY = 50.0f;
-		E->IsActive  = true;
+internal void spawn_entity(game_state *GameState, mesh *entity_mesh, coordinate spawn_position, uint32 entity_color)
+{
+	Assert(GameState->EntityCount < MAX_ENTITIES);
+
+	entity *new_entity        = &GameState->Entities[GameState->EntityCount++];
+	new_entity->position      = spawn_position;
+	new_entity->entity_mesh   = entity_mesh;
+	new_entity->color         = entity_color;
 }
 
 internal temporary_memory TemporaryMemoryNew (memory_arena *Arena){
@@ -485,17 +483,27 @@ internal void parse_obj_into_mesh(memory_arena *arena, char *file_data, size_t f
 	Assert(output_mesh->face_count   == total_face_count);
 }
 
-internal debug_read_file_result load_obj_file(game_memory *Memory, thread_context *Thread, char* file_name){
+internal void free_obj_file_memory(game_memory *Memory, thread_context *Thread, debug_read_file_result file_result){
+	Memory->DEBUGPlatformFreeFileMemory(Thread, file_result.Contents);
+}
+
+internal mesh* load_obj_file(game_state *GameState, game_memory *Memory, thread_context *Thread, char* file_name){
 	char objpath[FILE_NAME_COUNT];
 	StringConcat(StringLength(Memory->DataPath), Memory->DataPath, StringLength(file_name), file_name, sizeof(objpath), objpath);
 	debug_read_file_result loaded_obj = Memory->DEBUGPlatformReadEntireFile(Thread, objpath);
 	Assert(loaded_obj.Contents);
-	return loaded_obj;
+
+	mesh *destination_mesh = &GameState->Meshes[GameState->MeshCount++];
+	parse_obj_into_mesh(&GameState->Arena, (char *)loaded_obj.Contents, loaded_obj.ContentsSize, destination_mesh);
+
+	printf("OBJ parsed: %d vertices, %d faces\n", destination_mesh->vertex_count, destination_mesh->face_count);
+	Assert(destination_mesh->vertex_count > 0); // catch a file that loaded but parsed to nothing
+	Assert(destination_mesh->face_count > 0);
+
+	free_obj_file_memory(Memory, Thread, loaded_obj);
+	return destination_mesh;
 }
 
-internal void free_obj_file_memory(game_memory *Memory, thread_context *Thread, debug_read_file_result file_result){
-	Memory->DEBUGPlatformFreeFileMemory(Thread, file_result.Contents);
-}
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	//Void unused parameter to make compiler happy
@@ -512,22 +520,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		GameState->Arena.Size = Memory->TransientStorageSize;
 		GameState->Arena.Base = (uint8 *)Memory->TransientStorage;
 		GameState->Arena.Used = 0;		
-		GameState->Entities[0].X =  0.5f; GameState->Entities[0].Y =  0.5f; GameState->Entities[0].Z =  0.5f;
-		GameState->Entities[1].X = -0.5f; GameState->Entities[1].Y =  0.5f; GameState->Entities[1].Z =  0.5f;
-		GameState->Entities[2].X =  0.5f; GameState->Entities[2].Y = -0.5f; GameState->Entities[2].Z =  0.5f;
-		GameState->Entities[3].X = -0.5f; GameState->Entities[3].Y = -0.5f; GameState->Entities[3].Z =  0.5f;
-		GameState->Entities[4].X =  0.5f; GameState->Entities[4].Y =  0.5f; GameState->Entities[4].Z = -0.5f;
-		GameState->Entities[5].X = -0.5f; GameState->Entities[5].Y =  0.5f; GameState->Entities[5].Z = -0.5f;
-		GameState->Entities[6].X =  0.5f; GameState->Entities[6].Y = -0.5f; GameState->Entities[6].Z = -0.5f;
-		GameState->Entities[7].X = -0.5f; GameState->Entities[7].Y = -0.5f; GameState->Entities[7].Z = -0.5f;
-		GameState->EntityCount = 8;
 
 
 		//penger loading, parsing, printf, memory freeing
-		debug_read_file_result pengerobj = load_obj_file(Memory, Thread, (char *)"real-penger.obj");
-		parse_obj_into_mesh(&GameState->Arena, (char *)pengerobj.Contents, pengerobj.ContentsSize, &GameState->Mesh);
-		printf("OBJ parsed: %d vertices, %d faces\n", GameState->Mesh.vertex_count, GameState->Mesh.face_count);
-		free_obj_file_memory(Memory, Thread, pengerobj);
+		mesh* penger_mesh_dest = load_obj_file(GameState, Memory, Thread, (char *)"real-penger.obj");
+		coordinate penger_world_coordinate = {1.0f, 1.0f, 0.0f};
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate, 0xFF90EE90);
+	// spawn_entity(GameState, penger_mesh, 3.0f, 0.0f, 0.0f, 0xFFFF9090); // second penger, different position
+	// spawn_entity(GameState, other_mesh, -3.0f, 0.0f, 0.0f, 0xFF9090FF); // different model entirely
+
+		
 		
 		
 		
@@ -536,7 +538,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		Memory->IsInitialized = true;
 	};
 	temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
-	coordinate *screen_points = (coordinate *)ArenaPush(&GameState->Arena, sizeof(coordinate) * GameState->Mesh.vertex_count);
 
 	//For loop for multiple controller
 	for(uint32 ControllerIndex = 0; ControllerIndex <(uint32)(ArrayCount(Input->Controllers)); ++ControllerIndex){
@@ -566,62 +567,41 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	real32 camera_z = 3.0f;
 	
 	
-	for(uint32 vertex_index = 0; vertex_index < GameState->Mesh.vertex_count; ++vertex_index)
+	for(uint32 entity_index = 0; entity_index < GameState->EntityCount; ++entity_index)
 	{
-		coordinate *source_vertex = &GameState->Mesh.vertices[vertex_index];
-		coordinate rotated = rotate(source_vertex->x, source_vertex->y, source_vertex->z, GameState->timer);
-		coordinate projected = project(rotated.x, rotated.y, rotated.z + camera_z);
-		coordinate screen_point = screen(projected, Buffer->Width, Buffer->Height);
+	entity *current_entity   = &GameState->Entities[entity_index];
+	mesh   *current_mesh     = current_entity->entity_mesh;
 
-		screen_point.y += 200.0f;
+	coordinate *screen_points = (coordinate *)ArenaPush(&GameState->Arena, sizeof(coordinate) * current_mesh->vertex_count);
 
-		screen_points[vertex_index] = screen_point;
+	for(uint32 vertex_index = 0; vertex_index < current_mesh->vertex_count; ++vertex_index)
+	{
+		coordinate *source_vertex      = &current_mesh->vertices[vertex_index];
+		coordinate rotated_vertex      = rotate(source_vertex->x, source_vertex->y, source_vertex->z, GameState->timer /*+ current_entity->rotation_yaw*/);
+		coordinate projected_vertex    = project(rotated_vertex.x + current_entity->position.x, rotated_vertex.y + current_entity->position.y,
+												 rotated_vertex.z + current_entity->position.z + camera_z);
+		coordinate screen_space_vertex = screen(projected_vertex, Buffer->Width, Buffer->Height);
+
+		/*screen_space_vertex.y += 200.0f; manual penger pixelbased adjustment*/
+		screen_points[vertex_index] = screen_space_vertex;
 	}
-		
-	for(uint32 face_index = 0; face_index < GameState->Mesh.face_count; ++face_index)
+
+	for(uint32 face_index = 0; face_index < current_mesh->face_count; ++face_index)
 	{
-		mesh_face *face = &GameState->Mesh.faces[face_index];
-		for(uint32 v = 0; v < face->vertex_count; ++v)
+		mesh_face *current_face = &current_mesh->faces[face_index];
+		for(uint32 face_vertex_index = 0; face_vertex_index < current_face->vertex_count; ++face_vertex_index)
 		{
-			int32 a = face->vertex_index[v];
-			int32 b = face->vertex_index[(v + 1) % face->vertex_count];
-			DrawLine(Buffer, screen_points[a], screen_points[b], box_color);
+			int32 vertex_a = current_face->vertex_index[face_vertex_index];
+			int32 vertex_b = current_face->vertex_index[(face_vertex_index + 1) % current_face->vertex_count];
+
+			DrawLine(Buffer, screen_points[vertex_a], screen_points[vertex_b], current_entity->color);
 		}
 	}
-	/* old rotating box code to be deleted
-	coordinate p2 = {};
-	coordinate p3 = {};
+}
 
-	coordinate screen_points[8] = {};
-	int screen_count = 0;
-	for (int i = 0; i < GameState->EntityCount; ++i){
 
-		coordinate rotated = rotate(GameState->Entities[i].X, GameState->Entities[i].Y, GameState->Entities[i].Z, GameState->timer);
-		
-		p2 = project(rotated.x, rotated.y, rotated.z + camera_z);
-		p3 = screen(p2, Buffer->Width, Buffer->Height);
-		
-		screen_points[screen_count++] = p3;
-	}
 
-	// draw lines between front face (0-3) and back face (4-7)
-	// front face edges
-	DrawLine(Buffer, screen_points[0], screen_points[1], box_color);
-	DrawLine(Buffer, screen_points[1], screen_points[3], box_color);
-	DrawLine(Buffer, screen_points[3], screen_points[2], box_color);
-	DrawLine(Buffer, screen_points[2], screen_points[0], box_color);
-	// back face edges
-	DrawLine(Buffer, screen_points[4], screen_points[5], box_color);
-	DrawLine(Buffer, screen_points[5], screen_points[7], box_color);
-	DrawLine(Buffer, screen_points[7], screen_points[6], box_color);
-	DrawLine(Buffer, screen_points[6], screen_points[4], box_color);
-	// connecting edges
-	DrawLine(Buffer, screen_points[0], screen_points[4], box_color);
-	DrawLine(Buffer, screen_points[1], screen_points[5], box_color);
-	DrawLine(Buffer, screen_points[2], screen_points[6], box_color);
-	DrawLine(Buffer, screen_points[3], screen_points[7], box_color);
-*/
-	RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
+RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
 
 
 
