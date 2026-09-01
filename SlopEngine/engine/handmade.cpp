@@ -42,7 +42,6 @@ internal bool32 character_is_whitespace(char character)
 	return (character == ' ' || character == '\t' || character == '\r');
 }
 
-
 //claude parsing
 internal real32 string_to_float(char **current_position_pointer, char *end)
 {
@@ -353,97 +352,6 @@ internal coordinate rotate(real32 x, real32 y, real32 z, real32 angle){
 
 }
 
-internal bool32 character_is_digit(char character)
-{
-	return (character >= '0' && character <= '9');
-}
-
-internal bool32 character_is_whitespace(char character)
-{
-	return (character == ' ' || character == '\t' || character == '\r');
-}
-
-internal char *skip_whitespace(char *current_position, char *line_end)
-{
-	while(current_position < line_end && character_is_whitespace(*current_position))
-	{
-		++current_position;
-	}
-	return current_position;
-}
-
-// parses a single floating point number starting at current_position,
-// stops at line_end or the first non-numeric character, and advances
-// current_position past the parsed number via the out parameter
-internal real32 parse_floating_point_number(char **current_position_pointer, char *line_end)
-{
-	char *current_position = *current_position_pointer;
-	current_position = skip_whitespace(current_position, line_end);
-
-	real32 sign = 1.0f;
-	if(current_position < line_end && *current_position == '-')
-	{
-		sign = -1.0f;
-		++current_position;
-	}
-	else if(current_position < line_end && *current_position == '+')
-	{
-		++current_position;
-	}
-
-	real32 integer_part = 0.0f;
-	while(current_position < line_end && character_is_digit(*current_position))
-	{
-		integer_part = integer_part * 10.0f + (real32)(*current_position - '0');
-		++current_position;
-	}
-
-	real32 fractional_part = 0.0f;
-	real32 fractional_scale = 1.0f;
-	if(current_position < line_end && *current_position == '.')
-	{
-		++current_position;
-		while(current_position < line_end && character_is_digit(*current_position))
-		{
-			fractional_scale *= 0.1f;
-			fractional_part += (real32)(*current_position - '0') * fractional_scale;
-			++current_position;
-		}
-	}
-
-	// NOTE: scientific notation (1e-05) is not handled here.
-	// This OBJ file does not appear to use it, but if a future
-	// file does, extend this to check for 'e'/'E' after the fraction.
-
-	*current_position_pointer = current_position;
-	return sign * (integer_part + fractional_part);
-}
-
-// parses a single integer starting at current_position, stops at the
-// first non-digit character, and advances current_position via the
-// out parameter
-internal int32 parse_integer_number(char **current_position_pointer, char *line_end)
-{
-	char *current_position = *current_position_pointer;
-
-	int32 sign = 1;
-	if(current_position < line_end && *current_position == '-')
-	{
-		sign = -1;
-		++current_position;
-	}
-
-	int32 result = 0;
-	while(current_position < line_end && character_is_digit(*current_position))
-	{
-		result = result * 10 + (*current_position - '0');
-		++current_position;
-	}
-
-	*current_position_pointer = current_position;
-	return sign * result;
-}
-
 // parses one "vertex_index/texture_index/normal_index" style face
 // reference and returns only the position index, since mesh_face does
 // not store texture or normal indices
@@ -503,6 +411,9 @@ internal void count_obj_lines(char *file_data, size_t file_data_size, int32 *out
 
 internal void parse_obj_into_mesh(memory_arena *arena, char *file_data, size_t file_data_size, mesh *output_mesh)
 {
+
+	Assert(file_data);
+	Assert(file_data_size > 0);
 	// ---- PASS 1: count vertices and faces so the arena allocation is exact ----
 	int32 total_vertex_count = 0;
 	int32 total_face_count   = 0;
@@ -604,10 +515,18 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		debug_read_file_result pengerobj = Memory->DEBUGPlatformReadEntireFile(Thread, objpath);
 
 
+
+		Assert(pengerobj.Contents);
+
+		
+		parse_obj_into_mesh(&GameState->Arena, (char *)pengerobj.Contents, pengerobj.ContentsSize, &GameState->Mesh);
+		printf("OBJ parsed: %d vertices, %d faces\n", GameState->Mesh.vertex_count, GameState->Mesh.face_count);
+
 		Memory->DEBUGPlatformFreeFileMemory(Thread, pengerobj.Contents);
 		Memory->IsInitialized = true;
 	};
-temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
+	temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
+	coordinate *screen_points = (coordinate *)ArenaPush(&GameState->Arena, sizeof(coordinate) * GameState->Mesh.vertex_count);
 
 	//For loop for multiple controller
 	for(uint32 ControllerIndex = 0; ControllerIndex <(uint32)(ArrayCount(Input->Controllers)); ++ControllerIndex){
@@ -628,19 +547,43 @@ temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
 	
 	//COLOR FORMAT IS 0xAARRGGBB (something something little endian windows something something)
 	uint32 background_color = 0xFF73BFFF;
+	//screen clear call/background
+	DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height, background_color);
+
 	uint32 box_color = 0xFF90EE90;
 	real32 point_size = 20.0f;
 	real32 offset = 50.0f;
+	real32 camera_z = 3.0f;
 	
-	//screen clear call/background
-	DrawRectangle(Buffer, 0.0f, 0.0f, (real32)Buffer->Width, (real32)Buffer->Height, background_color);
-	real32 size = 20.0f;
+	
+	for(int32 vertex_index = 0; vertex_index < GameState->Mesh.vertex_count; ++vertex_index)
+	{
+		coordinate *source_vertex = &GameState->Mesh.vertices[vertex_index];
+		coordinate rotated = rotate(source_vertex->x, source_vertex->y, source_vertex->z, GameState->timer);
+		coordinate projected = project(rotated.x, rotated.y, rotated.z + camera_z);
+		coordinate screen_point = screen(projected, Buffer->Width, Buffer->Height);
+
+		screen_point.y += 200.0f;
+
+		screen_points[vertex_index] = screen_point;
+	}
+		
+	for(int32 face_index = 0; face_index < GameState->Mesh.face_count; ++face_index)
+	{
+		mesh_face *face = &GameState->Mesh.faces[face_index];
+		for(int32 v = 0; v < face->vertex_count; ++v)
+		{
+			int32 a = face->vertex_index[v];
+			int32 b = face->vertex_index[(v + 1) % face->vertex_count];
+			DrawLine(Buffer, screen_points[a], screen_points[b], box_color);
+		}
+	}
+	/* old rotating box code to be deleted
 	coordinate p2 = {};
 	coordinate p3 = {};
-	real32 camera_z = 3.0f;
+
 	coordinate screen_points[8] = {};
 	int screen_count = 0;
-
 	for (int i = 0; i < GameState->EntityCount; ++i){
 
 		coordinate rotated = rotate(GameState->Entities[i].X, GameState->Entities[i].Y, GameState->Entities[i].Z, GameState->timer);
@@ -649,7 +592,6 @@ temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
 		p3 = screen(p2, Buffer->Width, Buffer->Height);
 		
 		screen_points[screen_count++] = p3;
-	//	DrawCenteredBoxCoordinate(Buffer, p3, size, box_color);
 	}
 
 	// draw lines between front face (0-3) and back face (4-7)
@@ -668,7 +610,7 @@ temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
 	DrawLine(Buffer, screen_points[1], screen_points[5], box_color);
 	DrawLine(Buffer, screen_points[2], screen_points[6], box_color);
 	DrawLine(Buffer, screen_points[3], screen_points[7], box_color);
-
+*/
 	RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
 
 
