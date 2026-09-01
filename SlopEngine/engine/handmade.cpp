@@ -313,6 +313,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		GameState->Entities[7].X = -0.5f; GameState->Entities[7].Y = -0.5f; GameState->Entities[7].Z = -0.5f;
 		GameState->EntityCount = 8;
 
+
+		debug_read_file_result pengerobj = Memory->DEBUGPlatformReadEntireFile(Thread, "real-penger.obj");
+		Memory->DEBUGPlatformFreeFileMemory(Thread, pengerobj.Contents);
 		Memory->IsInitialized = true;
 	};
 temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);

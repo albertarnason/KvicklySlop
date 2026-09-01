@@ -77,7 +77,7 @@ debug_read_file_result DEBUGPlatformReadEntireFile(char *Filename);
 void DEBUGPlatformFreeFileMemory(void *Memory);
 bool32 DEBUGPlatformWriteEntireFile(char *Filename, uint32 MemorySize, void *Memory);
 */
-#define DEBUG_PLATFORM_FREE_FILE_MEMORY(name) void name (thread_context *Thread, void *Memory, uint64 Size)
+#define DEBUG_PLATFORM_FREE_FILE_MEMORY(name) void name (thread_context *Thread, void *Memory)
 typedef DEBUG_PLATFORM_FREE_FILE_MEMORY(debug_platform_free_file_memory);
 
 #define DEBUG_PLATFORM_WRITE_ENTIRE_FILE(name) bool32 name (thread_context *Thread, char *Filename, uint32 MemorySize, void *Memory)
