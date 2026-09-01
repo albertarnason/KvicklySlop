@@ -586,9 +586,6 @@ void* BaseAddress = 0;
 					Game.GetSoundSamples(&Thread, &GameMemory, &SoundBuffer);
 					SDL_PutAudioStreamData(audio_stream, SoundBuffer.Samples, BytesToWrite);
 				}
-				
-				// 5. Submit the newly generated data to the SDL3 stream
-				SDL_PutAudioStreamData(audio_stream, SoundBuffer.Samples, BytesToWrite);
 
 			}
 					
