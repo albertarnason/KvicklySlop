@@ -35,7 +35,7 @@ fi
 # Game layer #
 ##############
 
-g++ SlopEngine/engine/handmade.cpp -o build/libhandmade.so -shared -fPIC $COMMON_FLAGS $BUILD_FLAGS
+g++ SlopEngine/engine/handmade.cpp -o build/handmade.so -shared -fPIC $COMMON_FLAGS $BUILD_FLAGS
 
 ##################
 # Platform layer #
