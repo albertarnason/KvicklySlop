@@ -313,8 +313,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		GameState->Entities[7].X = -0.5f; GameState->Entities[7].Y = -0.5f; GameState->Entities[7].Z = -0.5f;
 		GameState->EntityCount = 8;
 
+		char objpath[FILE_NAME_COUNT];
+		StringConcat(StringLength(Memory->DataPath), Memory->DataPath, StringLength((char *)"real-penger.obj"), (char *)"real-penger.obj", sizeof(objpath), objpath);
+		debug_read_file_result pengerobj = Memory->DEBUGPlatformReadEntireFile(Thread, objpath);
 
-		debug_read_file_result pengerobj = Memory->DEBUGPlatformReadEntireFile(Thread, "real-penger.obj");
+
 		Memory->DEBUGPlatformFreeFileMemory(Thread, pengerobj.Contents);
 		Memory->IsInitialized = true;
 	};

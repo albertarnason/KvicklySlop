@@ -10,12 +10,10 @@
 
 #include <stdio.h>
 
-//max path
-#define PLATFORM_STATE_FILE_NAME_COUNT 260
 
 struct platform_replay_buffer
 {
-	char   Filename[PLATFORM_STATE_FILE_NAME_COUNT];
+	char   Filename[FILE_NAME_COUNT];
 	void  *MemoryBlock;
 };
 
@@ -30,7 +28,7 @@ struct platform_state
 	int input_recording_index;
 	int input_playing_index;
 
-	char exe_file_name[PLATFORM_STATE_FILE_NAME_COUNT];
+	char exe_file_name[FILE_NAME_COUNT];
 	char *one_past_last_exe_file_name_slash; //win32 era leftover
 };
 
@@ -47,41 +45,7 @@ global_variable bool GlobalRunning;
 global_variable bool GlobalPause;
 global_variable uint64 GlobalPerfCountFrequency;
 
-//ghetto string concatenation
-internal void StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB, size_t DestCount, char *Dest){
-	for (size_t index = 0; index < SourceACount; ++index){
-		*Dest++ = *SourceA++;
-	}
-	for (size_t index = 0; index < SourceBCount; ++index){
-		*Dest++ = *SourceB++;
-	}
-	//TODO dest bounds checking
-	//cc strings end with null terminator
-	*Dest++ = 0;
-}
-internal size_t StringLength(const char *String){
-	size_t CharCount = 0;
-	//if *String != 0 count, remember C strings are null terminated!
-	while(*String++){
-		++CharCount;
-	}
-	return CharCount;
-}
 
-internal void
-StringCopy(size_t SourceCount, const char *Source, size_t DestCount, char *Dest)
-{
-	// Assert instead of silently truncating
-	// so oversized paths get caught immediately in debug builds
-	Assert(SourceCount < DestCount);
-
-	for(size_t Index = 0; Index < SourceCount; ++Index)
-	{
-		Dest[Index] = Source[Index];
-	}
-
-	Dest[SourceCount] = 0;
-}
 
 inline uint64
 SDLGetWallClock(void)
@@ -193,6 +157,11 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile){
 		Result.ContentsSize = SafeTruncateUInt64(FileSize);
 	}
 
+	if(!FileData)
+	{
+		SDL_Log("Failed to load file: %s", SDL_GetError());
+	}
+
 	return(Result);
 }
 
@@ -228,7 +197,7 @@ internal void SDLBeginRecordingInput(platform_state *State, int input_recording_
 	if(replay_buffer->MemoryBlock){
 		State->input_recording_index = input_recording_index;
 
-		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
+		char filename[FILE_NAME_COUNT];
 		SDLGetInputFileLocation(State, true, input_recording_index, sizeof(filename), filename);
 		State->RecordingHandle = SDL_IOFromFile(filename, "wb");
 		memcpy(replay_buffer->MemoryBlock, State->GameMemoryBlock, State->TotalSize);
@@ -247,7 +216,7 @@ internal void SDLBeginInputPlayback(platform_state *State, int input_playing_ind
 	if(replay_buffer->MemoryBlock){
 		State->input_playing_index =  input_playing_index;
 				
-		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
+		char filename[FILE_NAME_COUNT];
 		SDLGetInputFileLocation(State, true, input_playing_index, sizeof(filename), filename);
 		State->PlaybackHandle = SDL_IOFromFile(filename, "rb");
 		memcpy(State->GameMemoryBlock, replay_buffer->MemoryBlock, State->TotalSize);
@@ -390,7 +359,7 @@ int main(int argc, char *argv[])
 	platform_state State = {};
 	SDLGetEXEFileName(&State);
 
-	char SourceGameCodeDLLFullPath[PLATFORM_STATE_FILE_NAME_COUNT];
+	char SourceGameCodeDLLFullPath[FILE_NAME_COUNT];
 #if defined(_WIN32)
     char SourceGameCodeDLLFileName[] = "handmade.dll";
     char TempGameCodeDLLFileName[]   = "handmade_temp.dll";
@@ -401,9 +370,10 @@ int main(int argc, char *argv[])
 	SDLBuildEXEPathFileName(&State, SourceGameCodeDLLFileName,
 							   sizeof(SourceGameCodeDLLFullPath), SourceGameCodeDLLFullPath);
 
-	char TempGameCodeDLLFullPath[PLATFORM_STATE_FILE_NAME_COUNT];
+	char TempGameCodeDLLFullPath[FILE_NAME_COUNT];
 	SDLBuildEXEPathFileName(&State, TempGameCodeDLLFileName,
 							   sizeof(TempGameCodeDLLFullPath), TempGameCodeDLLFullPath);
+	
 	
 
 #if defined(_WIN32)
@@ -456,6 +426,8 @@ void* BaseAddress = 0;
 	GameMemory.PermanentStorage = State.GameMemoryBlock;
 	GameMemory.TransientStorage = ((uint8 *)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);
 
+	//save data path to game memory, so engine layer knows where to request file loads
+	SDLBuildEXEPathFileName(&State, (char *)"../SlopEngine/data/", sizeof(GameMemory.DataPath), GameMemory.DataPath);
 	// NEW: allocate a snapshot buffer for each replay slot
 	for (uint64 ReplayIndex = 0; ReplayIndex < ArrayCount(State.ReplayBuffers); ++ReplayIndex)
 	{

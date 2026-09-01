@@ -11,6 +11,8 @@
 //such as passing foo+bar next to [0] for bar[0]
 
 
+//max path
+#define FILE_NAME_COUNT 260
 
 /*
 HANDMADE_INTERNAL:
@@ -165,7 +167,7 @@ struct game_memory{
     void *PermanentStorage; //REQUIRED to be cleared to 0
     uint64 TransientStorageSize;
     void *TransientStorage;  //REQUIRED to be cleared to 0
-
+    char DataPath[FILE_NAME_COUNT]; 
 
     //function pointers to debug functions
     //c++ vtable dispatch like
@@ -185,7 +187,41 @@ extern "C" void GameGetSoundSamples(thread_context *Thread, game_memory *Memory,
 #define GAME_GET_SOUND_SAMPLES(name) void name (thread_context *Thread, game_memory *Memory, game_sound_output_buffer *SoundBuffer)
 typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
 
+//ghetto string concatenation
+internal void StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB, size_t DestCount, char *Dest){
+	for (size_t index = 0; index < SourceACount; ++index){
+		*Dest++ = *SourceA++;
+	}
+	for (size_t index = 0; index < SourceBCount; ++index){
+		*Dest++ = *SourceB++;
+	}
+	//TODO dest bounds checking
+	//cc strings end with null terminator
+	*Dest++ = 0;
+}
+internal size_t StringLength(const char *String){
+	size_t CharCount = 0;
+	//if *String != 0 count, remember C strings are null terminated!
+	while(*String++){
+		++CharCount;
+	}
+	return CharCount;
+}
 
+internal void
+StringCopy(size_t SourceCount, const char *Source, size_t DestCount, char *Dest)
+{
+	// Assert instead of silently truncating
+	// so oversized paths get caught immediately in debug builds
+	Assert(SourceCount < DestCount);
+
+	for(size_t Index = 0; Index < SourceCount; ++Index)
+	{
+		Dest[Index] = Source[Index];
+	}
+
+	Dest[SourceCount] = 0;
+}
 
 struct entity{
     real32 X;
@@ -245,6 +281,10 @@ struct game_state{
 internal void *ArenaPush(memory_arena *Arena, size_t Size);
 
 internal void *ArenaPushZero(memory_arena *Arena, size_t Size);
+
+internal size_t StringLength(const char *String);
+
+internal void StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB, size_t DestCount, char *Dest);
 
 #define HANDMADE_H
 #endif
