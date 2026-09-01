@@ -67,9 +67,9 @@ struct thread_context{
 
 //NOT for shipping! Blocking and write doesnt protect against lost data!
 struct debug_read_file_result
-{   
-    uint32 ContentsSize;
-    void *Contents;
+{
+	uint32 ContentsSize;
+	void  *Contents; // guaranteed to have a null terminator at Contents[ContentsSize]
 };
 
 
@@ -255,17 +255,17 @@ struct coordinate{
 
 struct mesh_face
 {
-	int32 VertexIndex[4]; // supports quads; use first 3 if triangle
-	int32 VertexCount;    // 3 or 4
+	int32 vertex_index[4];
+	int32 vertex_count;
 };
 
 struct mesh
 {
-	coordinate *Vertices;
-	int32       VertexCount;
+	coordinate *vertices;
+	int32       vertex_count;
 
-	mesh_face  *Faces;
-	int32       FaceCount;
+	mesh_face  *faces;
+	int32       face_count;
 };
 
 #define MAX_ENTITIES 1024

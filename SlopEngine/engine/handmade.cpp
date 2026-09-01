@@ -30,6 +30,71 @@ internal void GameOutputSound(game_state *GameState, game_sound_output_buffer *S
 
 }
 
+//claude helper
+internal bool32 character_is_digit(char character)
+{
+	return (character >= '0' && character <= '9');
+}
+
+//claude helper
+internal bool32 character_is_whitespace(char character)
+{
+	return (character == ' ' || character == '\t' || character == '\r');
+}
+
+
+//claude parsing
+internal real32 string_to_float(char **current_position_pointer, char *end)
+{
+	char *current_position = *current_position_pointer;
+	while(current_position < end && character_is_whitespace(*current_position)){ ++current_position; }
+
+	real32 sign = 1.0f;
+	if(current_position < end && *current_position == '-'){ sign = -1.0f; ++current_position; }
+
+	real32 value = 0.0f;
+	while(current_position < end && character_is_digit(*current_position))
+	{
+		value = value * 10.0f + (real32)(*current_position - '0');
+		++current_position;
+	}
+
+	if(current_position < end && *current_position == '.')
+	{
+		++current_position;
+		real32 scale = 0.1f;
+		while(current_position < end && character_is_digit(*current_position))
+		{
+			value += (real32)(*current_position - '0') * scale;
+			scale *= 0.1f;
+			++current_position;
+		}
+	}
+
+	*current_position_pointer = current_position;
+	return sign * value;
+}
+
+//claude parsing
+internal int32 string_to_integer(char **current_position_pointer, char *end)
+{
+	char *current_position = *current_position_pointer;
+	while(current_position < end && character_is_whitespace(*current_position)){ ++current_position; }
+
+	int32 sign = 1;
+	if(current_position < end && *current_position == '-'){ sign = -1; ++current_position; }
+
+	int32 value = 0;
+	while(current_position < end && character_is_digit(*current_position))
+	{
+		value = value * 10 + (*current_position - '0');
+		++current_position;
+	}
+
+	*current_position_pointer = current_position;
+	return sign * value;
+}
+
 internal void RenderPlayer(game_offscreen_buffer *Buffer, int PlayerX, int PlayerY){
 	uint8 *EndOfBuffer = (uint8 *)Buffer->Memory + Buffer->Pitch*Buffer->Height;
 	uint32 color = 0xFF0000FF;
@@ -286,6 +351,227 @@ internal coordinate rotate(real32 x, real32 y, real32 z, real32 angle){
 	result.z = (x * sinf(angle)) + (z * cosf(angle));
 	return result;
 
+}
+
+internal bool32 character_is_digit(char character)
+{
+	return (character >= '0' && character <= '9');
+}
+
+internal bool32 character_is_whitespace(char character)
+{
+	return (character == ' ' || character == '\t' || character == '\r');
+}
+
+internal char *skip_whitespace(char *current_position, char *line_end)
+{
+	while(current_position < line_end && character_is_whitespace(*current_position))
+	{
+		++current_position;
+	}
+	return current_position;
+}
+
+// parses a single floating point number starting at current_position,
+// stops at line_end or the first non-numeric character, and advances
+// current_position past the parsed number via the out parameter
+internal real32 parse_floating_point_number(char **current_position_pointer, char *line_end)
+{
+	char *current_position = *current_position_pointer;
+	current_position = skip_whitespace(current_position, line_end);
+
+	real32 sign = 1.0f;
+	if(current_position < line_end && *current_position == '-')
+	{
+		sign = -1.0f;
+		++current_position;
+	}
+	else if(current_position < line_end && *current_position == '+')
+	{
+		++current_position;
+	}
+
+	real32 integer_part = 0.0f;
+	while(current_position < line_end && character_is_digit(*current_position))
+	{
+		integer_part = integer_part * 10.0f + (real32)(*current_position - '0');
+		++current_position;
+	}
+
+	real32 fractional_part = 0.0f;
+	real32 fractional_scale = 1.0f;
+	if(current_position < line_end && *current_position == '.')
+	{
+		++current_position;
+		while(current_position < line_end && character_is_digit(*current_position))
+		{
+			fractional_scale *= 0.1f;
+			fractional_part += (real32)(*current_position - '0') * fractional_scale;
+			++current_position;
+		}
+	}
+
+	// NOTE: scientific notation (1e-05) is not handled here.
+	// This OBJ file does not appear to use it, but if a future
+	// file does, extend this to check for 'e'/'E' after the fraction.
+
+	*current_position_pointer = current_position;
+	return sign * (integer_part + fractional_part);
+}
+
+// parses a single integer starting at current_position, stops at the
+// first non-digit character, and advances current_position via the
+// out parameter
+internal int32 parse_integer_number(char **current_position_pointer, char *line_end)
+{
+	char *current_position = *current_position_pointer;
+
+	int32 sign = 1;
+	if(current_position < line_end && *current_position == '-')
+	{
+		sign = -1;
+		++current_position;
+	}
+
+	int32 result = 0;
+	while(current_position < line_end && character_is_digit(*current_position))
+	{
+		result = result * 10 + (*current_position - '0');
+		++current_position;
+	}
+
+	*current_position_pointer = current_position;
+	return sign * result;
+}
+
+// parses one "vertex_index/texture_index/normal_index" style face
+// reference and returns only the position index, since mesh_face does
+// not store texture or normal indices
+internal int32 parse_face_vertex_reference(char **current_position_pointer, char *line_end)
+{
+	char *current_position = *current_position_pointer;
+
+	int32 one_based_vertex_index = string_to_integer(&current_position, line_end);
+
+	// skip past any "/texture_index/normal_index" that follows
+	while(current_position < line_end && !character_is_whitespace(*current_position))
+	{
+		++current_position;
+	}
+
+	*current_position_pointer = current_position;
+	return one_based_vertex_index - 1; // OBJ indices are 1-based
+}
+
+internal void count_obj_lines(char *file_data, size_t file_data_size, int32 *out_vertex_count, int32 *out_face_count)
+{
+	int32 vertex_count = 0;
+	int32 face_count   = 0;
+
+	char *current_position = file_data;
+	char *file_end         = file_data + file_data_size;
+
+	while(current_position < file_end)
+	{
+		char *line_start = current_position;
+
+		while(current_position < file_end && *current_position != '\n')
+		{
+			++current_position;
+		}
+
+		if(line_start < file_end)
+		{
+			if(line_start[0] == 'v' && line_start[1] == ' ')
+			{
+				++vertex_count;
+			}
+			else if(line_start[0] == 'f' && line_start[1] == ' ')
+			{
+				++face_count;
+			}
+			// NOTE: 'vn ' and 'vt ' lines are naturally excluded above
+			// since their second character is not a space.
+		}
+
+		++current_position; // skip the '\n'
+	}
+
+	*out_vertex_count = vertex_count;
+	*out_face_count   = face_count;
+}
+
+internal void parse_obj_into_mesh(memory_arena *arena, char *file_data, size_t file_data_size, mesh *output_mesh)
+{
+	// ---- PASS 1: count vertices and faces so the arena allocation is exact ----
+	int32 total_vertex_count = 0;
+	int32 total_face_count   = 0;
+	count_obj_lines(file_data, file_data_size, &total_vertex_count, &total_face_count);
+
+	output_mesh->vertices     = (coordinate *)ArenaPush(arena, sizeof(coordinate) * total_vertex_count);
+	output_mesh->faces        = (mesh_face *)ArenaPush(arena, sizeof(mesh_face) * total_face_count);
+	output_mesh->vertex_count = 0;
+	output_mesh->face_count   = 0;
+
+	// ---- PASS 2: fill vertices and faces ----
+	char *current_position = file_data;
+	char *file_end         = file_data + file_data_size;
+
+	while(current_position < file_end)
+	{
+		char *line_start = current_position;
+
+		while(current_position < file_end && *current_position != '\n')
+		{
+			++current_position;
+		}
+		char *line_end = current_position; // exclusive
+		++current_position;                // skip '\n' for next iteration
+
+		if(line_start >= line_end)
+		{
+			continue; // empty line
+		}
+
+		if(line_start[0] == 'v' && line_start[1] == ' ')
+		{
+			char *parse_position = line_start + 2; // skip "v "
+
+			real32 vertex_x = string_to_float(&parse_position, line_end);
+			real32 vertex_y = string_to_float(&parse_position, line_end);
+			real32 vertex_z = string_to_float(&parse_position, line_end);
+
+			coordinate *destination_vertex = &output_mesh->vertices[output_mesh->vertex_count++];
+			destination_vertex->x = vertex_x;
+			destination_vertex->y = vertex_y;
+			destination_vertex->z = vertex_z;
+		}
+		else if(line_start[0] == 'f' && line_start[1] == ' ')
+		{
+			char *parse_position = line_start + 2; // skip "f "
+
+			mesh_face *destination_face = &output_mesh->faces[output_mesh->face_count++];
+			destination_face->vertex_count = 0;
+
+			while(parse_position < line_end && destination_face->vertex_count < 4)
+			{
+				while(parse_position < line_end && character_is_whitespace(*parse_position))
+				{
+					++parse_position;
+				}
+				if(parse_position >= line_end)
+				{
+					break;
+				}
+
+				int32 vertex_index = parse_face_vertex_reference(&parse_position, line_end);
+				destination_face->vertex_index[destination_face->vertex_count++] = vertex_index;
+			}
+		}
+	}
+
+	Assert(output_mesh->vertex_count == total_vertex_count);
+	Assert(output_mesh->face_count   == total_face_count);
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){

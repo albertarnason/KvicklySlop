@@ -153,11 +153,23 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile){
 
 	if(FileData)
 	{
-		Result.Contents     = FileData;
-		Result.ContentsSize = SafeTruncateUInt64(FileSize);
+		// Guarantee a terminating null byte one past the actual content,
+		// so every downstream text parser can safely use standard C
+		// string functions (strtof, strtol, strchr, etc.) instead of
+		// tracking explicit end-of-buffer bounds themselves.
+		void *NullTerminatedData = SDL_realloc(FileData, FileSize + 1);
+		if(NullTerminatedData)
+		{
+			((char *)NullTerminatedData)[FileSize] = 0;
+			Result.Contents     = NullTerminatedData;
+			Result.ContentsSize = SafeTruncateUInt64(FileSize);
+		}
+		else
+		{
+			SDL_free(FileData);
+		}
 	}
-
-	if(!FileData)
+	else
 	{
 		SDL_Log("Failed to load file: %s", SDL_GetError());
 	}
