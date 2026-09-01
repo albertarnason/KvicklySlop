@@ -559,10 +559,12 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 
 		//penger loading, parsing, printf, memory freeing
 		mesh* penger_mesh_dest = load_obj_file(GameState, Memory, Thread, (char *)"real-penger.obj");
-		coordinate penger_world_coordinate = {0.0f, 0.0f, 0.0f};
-		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate, 0xFF90EE90);
-	// spawn_entity(GameState, penger_mesh, 3.0f, 0.0f, 0.0f, 0xFFFF9090); // second penger, different position
-	// spawn_entity(GameState, other_mesh, -3.0f, 0.0f, 0.0f, 0xFF9090FF); // different model entirely
+		coordinate penger_world_coordinate  = {1.0f, 0.0f, 0.0f};
+		coordinate penger_world_coordinate2 = {0.0f, 0.0f, 0.0f};
+		coordinate penger_world_coordinate3 = {-1.0f, 0.0f, 0.0f};
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate , 0xFF90EE90);
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate2, 0xFFFF9090); // second penger, different position
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate3, 0xFF9090FF); // different model entirely
 
 		
 		
