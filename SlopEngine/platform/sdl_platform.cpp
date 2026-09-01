@@ -391,12 +391,17 @@ int main(int argc, char *argv[])
 	SDLGetEXEFileName(&State);
 
 	char SourceGameCodeDLLFullPath[PLATFORM_STATE_FILE_NAME_COUNT];
-	char SourceGameCodeDLLFileName[] = "handmade.dll";
+#if defined(_WIN32)
+    char SourceGameCodeDLLFileName[] = "handmade.dll";
+    char TempGameCodeDLLFileName[]   = "handmade_temp.dll";
+#else
+    char SourceGameCodeDLLFileName[] = "handmade.so";
+    char TempGameCodeDLLFileName[]   = "handmade_temp.so";
+#endif
 	SDLBuildEXEPathFileName(&State, SourceGameCodeDLLFileName,
 							   sizeof(SourceGameCodeDLLFullPath), SourceGameCodeDLLFullPath);
 
 	char TempGameCodeDLLFullPath[PLATFORM_STATE_FILE_NAME_COUNT];
-	char TempGameCodeDLLFileName[] = "handmade_temp.dll";
 	SDLBuildEXEPathFileName(&State, TempGameCodeDLLFileName,
 							   sizeof(TempGameCodeDLLFullPath), TempGameCodeDLLFullPath);
 	
@@ -576,7 +581,11 @@ void* BaseAddress = 0;
 				SDL_memset(AudioSampleScratchBuffer, 0, (size_t)BytesToWrite);
 
 				// 4. game engine call
-				Game.GetSoundSamples(&Thread, &GameMemory, &SoundBuffer);
+				if (Game.GetSoundSamples)
+				{
+					Game.GetSoundSamples(&Thread, &GameMemory, &SoundBuffer);
+					SDL_PutAudioStreamData(audio_stream, SoundBuffer.Samples, BytesToWrite);
+				}
 				
 				// 5. Submit the newly generated data to the SDL3 stream
 				SDL_PutAudioStreamData(audio_stream, SoundBuffer.Samples, BytesToWrite);
