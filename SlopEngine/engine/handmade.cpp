@@ -485,6 +485,18 @@ internal void parse_obj_into_mesh(memory_arena *arena, char *file_data, size_t f
 	Assert(output_mesh->face_count   == total_face_count);
 }
 
+internal debug_read_file_result load_obj_file(game_memory *Memory, thread_context *Thread, char* file_name){
+	char objpath[FILE_NAME_COUNT];
+	StringConcat(StringLength(Memory->DataPath), Memory->DataPath, StringLength(file_name), file_name, sizeof(objpath), objpath);
+	debug_read_file_result loaded_obj = Memory->DEBUGPlatformReadEntireFile(Thread, objpath);
+	Assert(loaded_obj.Contents);
+	return loaded_obj;
+}
+
+internal void free_obj_file_memory(game_memory *Memory, thread_context *Thread, debug_read_file_result file_result){
+	Memory->DEBUGPlatformFreeFileMemory(Thread, file_result.Contents);
+}
+
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	//Void unused parameter to make compiler happy
   	(void)Thread;
@@ -511,18 +523,16 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		GameState->EntityCount = 8;
 
 
-
-		//penger loading
-		char objpath[FILE_NAME_COUNT];
-		StringConcat(StringLength(Memory->DataPath), Memory->DataPath, StringLength((char *)"real-penger.obj"), (char *)"real-penger.obj", sizeof(objpath), objpath);
-		debug_read_file_result pengerobj = Memory->DEBUGPlatformReadEntireFile(Thread, objpath);
-		Assert(pengerobj.Contents);
-
-				
+		//penger loading, parsing, printf, memory freeing
+		debug_read_file_result pengerobj = load_obj_file(Memory, Thread, (char *)"real-penger.obj");
 		parse_obj_into_mesh(&GameState->Arena, (char *)pengerobj.Contents, pengerobj.ContentsSize, &GameState->Mesh);
 		printf("OBJ parsed: %d vertices, %d faces\n", GameState->Mesh.vertex_count, GameState->Mesh.face_count);
-
-		Memory->DEBUGPlatformFreeFileMemory(Thread, pengerobj.Contents);
+		free_obj_file_memory(Memory, Thread, pengerobj);
+		
+		
+		
+		
+		
 		Memory->IsInitialized = true;
 	};
 	temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
