@@ -573,41 +573,43 @@ void* BaseAddress = 0;
 
 			}
 					
-			// Frame pacing, cpu melting solution of sleeping
-			uint64 WorkCounter = SDLGetWallClock();
-			real32 WorkSecondsElapsed = SDLGetSecondsElapsed(LastCounter, WorkCounter);
-			real32 SecondsElapsedForFrame = WorkSecondsElapsed;
-
-			if (SecondsElapsedForFrame < TargetSecondsPerFrame)
-			{
-				if (SleepIsGranular)
-				{
-					uint32 SleepMS = (uint32)(1000.0f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
-					if (SleepMS > 0)
-					{
-						SDL_Delay(SleepMS);
-					}
-				}
-
-				// Spin the remainder — Delay/Sleep can overshoot or undershoot,
-				// so busy-wait to land exactly on the frame boundary.
-				while (SecondsElapsedForFrame < TargetSecondsPerFrame)
-				{
-					SecondsElapsedForFrame = SDLGetSecondsElapsed(LastCounter, SDLGetWallClock());
-				}
-			}
-			else
-			{
-				// TODO: missed frame — log this
-			}
-
-			uint64 EndCounter = SDLGetWallClock();
-			LastCounter = EndCounter;
 
 			game_input *Temp = NewInput;
 			NewInput = OldInput;
 			OldInput = Temp;
 		}
+
+				// Frame pacing, cpu melting solution of sleeping
+		uint64 WorkCounter = SDLGetWallClock();
+		real32 WorkSecondsElapsed = SDLGetSecondsElapsed(LastCounter, WorkCounter);
+		real32 SecondsElapsedForFrame = WorkSecondsElapsed;
+
+		if (SecondsElapsedForFrame < TargetSecondsPerFrame)
+		{
+			if (SleepIsGranular)
+			{
+				uint32 SleepMS = (uint32)(1000.0f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
+				if (SleepMS > 0)
+				{
+					SDL_Delay(SleepMS);
+				}
+			}
+
+			// Spin the remainder — Delay/Sleep can overshoot or undershoot,
+			// so busy-wait to land exactly on the frame boundary.
+			while (SecondsElapsedForFrame < TargetSecondsPerFrame)
+			{
+				SecondsElapsedForFrame = SDLGetSecondsElapsed(LastCounter, SDLGetWallClock());
+			}
+		}
+		else
+		{
+			// TODO: missed frame — log this
+		}
+
+		uint64 EndCounter = SDLGetWallClock();
+		LastCounter = EndCounter;
+
 	}
 
 	SDLUnloadGameCode(&Game);

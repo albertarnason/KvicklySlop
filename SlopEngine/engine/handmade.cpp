@@ -338,16 +338,14 @@ internal coordinate project(real32 x, real32 y, real32 z){
 	return projection;
 }
 
-internal coordinate rotate(real32 x, real32 y, real32 z, real32 angle){
+internal coordinate rotate(real32 position_x, real32 position_y, real32 position_z, real32 angle){
 	coordinate result = {};
-	
-	sinf(angle); 
-	cosf(angle); 
-	result.x = (x * cosf(angle)) - (z * sinf(angle));
-	result.y = y;
-	result.z = (x * sinf(angle)) + (z * cosf(angle));
+	real32 sine_angle   = sinf(angle);
+	real32 cosine_angle = cosf(angle);
+	result.x = (position_x * cosine_angle) - (position_z * sine_angle);
+	result.y = position_y;
+	result.z = (position_x * sine_angle) + (position_z * cosine_angle);
 	return result;
-
 }
 
 // parses one "vertex_index/texture_index/normal_index" style face
