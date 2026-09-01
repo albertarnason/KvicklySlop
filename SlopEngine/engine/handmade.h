@@ -253,6 +253,20 @@ struct coordinate{
     real32 z;
 };
 
+struct mesh_face
+{
+	int32 VertexIndex[4]; // supports quads; use first 3 if triangle
+	int32 VertexCount;    // 3 or 4
+};
+
+struct mesh
+{
+	coordinate *Vertices;
+	int32       VertexCount;
+
+	mesh_face  *Faces;
+	int32       FaceCount;
+};
 
 #define MAX_ENTITIES 1024
 
@@ -266,10 +280,11 @@ struct game_state{
     //only used for sound example
     real32 tSine;
 
-
+    mesh Mesh;
     //arena is important
     memory_arena Arena;
 };
+
 
 
 //only for gamelayer atm
