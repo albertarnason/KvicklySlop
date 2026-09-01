@@ -510,15 +510,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		GameState->Entities[7].X = -0.5f; GameState->Entities[7].Y = -0.5f; GameState->Entities[7].Z = -0.5f;
 		GameState->EntityCount = 8;
 
+
+
+		//penger loading
 		char objpath[FILE_NAME_COUNT];
 		StringConcat(StringLength(Memory->DataPath), Memory->DataPath, StringLength((char *)"real-penger.obj"), (char *)"real-penger.obj", sizeof(objpath), objpath);
 		debug_read_file_result pengerobj = Memory->DEBUGPlatformReadEntireFile(Thread, objpath);
-
-
-
 		Assert(pengerobj.Contents);
 
-		
+				
 		parse_obj_into_mesh(&GameState->Arena, (char *)pengerobj.Contents, pengerobj.ContentsSize, &GameState->Mesh);
 		printf("OBJ parsed: %d vertices, %d faces\n", GameState->Mesh.vertex_count, GameState->Mesh.face_count);
 
