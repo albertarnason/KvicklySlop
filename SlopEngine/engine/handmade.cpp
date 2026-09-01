@@ -483,9 +483,43 @@ internal void parse_obj_into_mesh(memory_arena *arena, char *file_data, size_t f
 	Assert(output_mesh->face_count   == total_face_count);
 }
 
+internal void center_mesh_on_origin(mesh *target_mesh)
+{
+	Assert(target_mesh->vertex_count > 0);
+
+	coordinate min_bounds = target_mesh->vertices[0];
+	coordinate max_bounds = target_mesh->vertices[0];
+
+	for(uint32 vertex_index = 1; vertex_index < target_mesh->vertex_count; ++vertex_index)
+	{
+		coordinate *current_vertex = &target_mesh->vertices[vertex_index];
+
+		if(current_vertex->x < min_bounds.x) { min_bounds.x = current_vertex->x; }
+		if(current_vertex->y < min_bounds.y) { min_bounds.y = current_vertex->y; }
+		if(current_vertex->z < min_bounds.z) { min_bounds.z = current_vertex->z; }
+
+		if(current_vertex->x > max_bounds.x) { max_bounds.x = current_vertex->x; }
+		if(current_vertex->y > max_bounds.y) { max_bounds.y = current_vertex->y; }
+		if(current_vertex->z > max_bounds.z) { max_bounds.z = current_vertex->z; }
+	}
+
+	coordinate center_offset = {};
+	center_offset.x = (min_bounds.x + max_bounds.x) * 0.5f;
+	center_offset.y = (min_bounds.y + max_bounds.y) * 0.5f;
+	center_offset.z = (min_bounds.z + max_bounds.z) * 0.5f;
+
+	for(uint32 vertex_index = 0; vertex_index < target_mesh->vertex_count; ++vertex_index)
+	{
+		target_mesh->vertices[vertex_index].x -= center_offset.x;
+		target_mesh->vertices[vertex_index].y -= center_offset.y;
+		target_mesh->vertices[vertex_index].z -= center_offset.z;
+	}
+}
+
 internal void free_obj_file_memory(game_memory *Memory, thread_context *Thread, debug_read_file_result file_result){
 	Memory->DEBUGPlatformFreeFileMemory(Thread, file_result.Contents);
 }
+
 
 internal mesh* load_obj_file(game_state *GameState, game_memory *Memory, thread_context *Thread, char* file_name){
 	char objpath[FILE_NAME_COUNT];
@@ -496,6 +530,7 @@ internal mesh* load_obj_file(game_state *GameState, game_memory *Memory, thread_
 	mesh *destination_mesh = &GameState->Meshes[GameState->MeshCount++];
 	parse_obj_into_mesh(&GameState->Arena, (char *)loaded_obj.Contents, loaded_obj.ContentsSize, destination_mesh);
 
+	center_mesh_on_origin(destination_mesh);
 	printf("OBJ parsed: %d vertices, %d faces\n", destination_mesh->vertex_count, destination_mesh->face_count);
 	Assert(destination_mesh->vertex_count > 0); // catch a file that loaded but parsed to nothing
 	Assert(destination_mesh->face_count > 0);
@@ -524,7 +559,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 
 		//penger loading, parsing, printf, memory freeing
 		mesh* penger_mesh_dest = load_obj_file(GameState, Memory, Thread, (char *)"real-penger.obj");
-		coordinate penger_world_coordinate = {1.0f, 1.0f, 0.0f};
+		coordinate penger_world_coordinate = {0.0f, 0.0f, 0.0f};
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate, 0xFF90EE90);
 	// spawn_entity(GameState, penger_mesh, 3.0f, 0.0f, 0.0f, 0xFFFF9090); // second penger, different position
 	// spawn_entity(GameState, other_mesh, -3.0f, 0.0f, 0.0f, 0xFF9090FF); // different model entirely
