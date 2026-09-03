@@ -516,8 +516,8 @@ internal transform camera_get_transform(game_state *GameState){
 
 internal coordinate camera_get_forward(transform *camera_transform)
 {
-	real32 sine_angle   = sinf(camera_transform->rotation_yaw);
-	real32 cosine_angle = cosf(camera_transform->rotation_yaw);
+	real32 sine_angle   = -sinf(camera_transform->rotation_yaw);
+	real32 cosine_angle =  cosf(camera_transform->rotation_yaw);
 
 	coordinate forward;
 	forward.x = sine_angle;
@@ -606,41 +606,50 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
 	real32 timedelta = Input->dtForFrame;
 	GameState->timer += timedelta;
-
+	
+	
+	real32 camera_speed = 3.0f;
+	real32 camera_rotation_speed = 2.0f;
 	//For loop for multiple controller
 	for(uint32 ControllerIndex = 0; ControllerIndex <(uint32)(ArrayCount(Input->Controllers)); ++ControllerIndex){
-	game_controller_input *Controller = GetController(Input, ControllerIndex);
-	if(Controller->Analog){
-	}
-	else {
-		real32 camera_speed = 3.0f;
-		coordinate forward = camera_get_forward(&GameState->camera_transform);
+		game_controller_input *Controller = GetController(Input, ControllerIndex);
+		if(Controller->Analog){
+		}
+		else {
+			coordinate forward = camera_get_forward(&GameState->camera_transform);
 
-		if(Controller->MoveUp.EndedDown){
-			GameState->camera_transform.position.x += forward.x * camera_speed * timedelta;
-			GameState->camera_transform.position.z += forward.z * camera_speed * timedelta;
-		}
-		if(Controller->MoveDown.EndedDown){
-			GameState->camera_transform.position.x -= forward.x * camera_speed * timedelta;
-			GameState->camera_transform.position.z -= forward.z * camera_speed * timedelta;
-		}
-		if(Controller->MoveLeft.EndedDown){
-			GameState->camera_transform.position.x -= forward.z * camera_speed * timedelta;
-			GameState->camera_transform.position.z += forward.x * camera_speed * timedelta;
-		}
-		if(Controller->MoveRight.EndedDown){
-			GameState->camera_transform.position.x += forward.z * camera_speed * timedelta;
-			GameState->camera_transform.position.z -= forward.x * camera_speed * timedelta;
-		}
+			if(Controller->MoveUp.EndedDown){
+				GameState->camera_transform.position.x += forward.x * camera_speed * timedelta;
+				GameState->camera_transform.position.z += forward.z * camera_speed * timedelta;
+			}
+			if(Controller->MoveDown.EndedDown){
+				GameState->camera_transform.position.x -= forward.x * camera_speed * timedelta;
+				GameState->camera_transform.position.z -= forward.z * camera_speed * timedelta;
+			}
+			if(Controller->MoveLeft.EndedDown){
+				GameState->camera_transform.position.x -= forward.z * camera_speed * timedelta;
+				GameState->camera_transform.position.z += forward.x * camera_speed * timedelta;
+			}
+			if(Controller->MoveRight.EndedDown){
+				GameState->camera_transform.position.x += forward.z * camera_speed * timedelta;
+				GameState->camera_transform.position.z -= forward.x * camera_speed * timedelta;
+			}
 
-		if(Controller->RightShoulder.EndedDown){
-			GameState->camera_transform.position.y += camera_speed * timedelta;
-		}
-		if(Controller->LeftShoulder.EndedDown){
-			GameState->camera_transform.position.y -= camera_speed * timedelta;
+			if(Controller->RightShoulder.EndedDown){
+				GameState->camera_transform.position.y += camera_speed * timedelta;
+			}
+			if(Controller->LeftShoulder.EndedDown){
+				GameState->camera_transform.position.y -= camera_speed * timedelta;
+			}
+
+			if(Controller->ActionRight.EndedDown){
+				GameState->camera_transform.rotation_yaw += camera_rotation_speed * timedelta;
+			}
+			if(Controller->ActionLeft.EndedDown){
+				GameState->camera_transform.rotation_yaw -= camera_rotation_speed * timedelta;
+			}
 		}
 	}
-}
 	
 	//COLOR FORMAT IS 0xAARRGGBB (something something little endian windows something something)
 	uint32 background_color = 0xFF73BFFF;
