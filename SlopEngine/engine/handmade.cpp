@@ -286,10 +286,10 @@ internal void spawn_entity(game_state *GameState, mesh *entity_mesh, coordinate 
 {
 	Assert(GameState->EntityCount < MAX_ENTITIES);
 
-	entity *new_entity        = &GameState->Entities[GameState->EntityCount++];
-	new_entity->position      = spawn_position;
-	new_entity->entity_mesh   = entity_mesh;
-	new_entity->color         = entity_color;
+	entity *new_entity        			= &GameState->Entities[GameState->EntityCount++];
+	new_entity->transform.position      = spawn_position;
+	new_entity->entity_mesh   			= entity_mesh;
+	new_entity->color         			= entity_color;
 }
 
 internal temporary_memory TemporaryMemoryNew (memory_arena *Arena){
@@ -319,33 +319,6 @@ internal void *ArenaPushZero(memory_arena *Arena, size_t Size)
     uint8 *Byte = (uint8 *)Result;
     while(Size--){ *Byte++ = 0; }
     return Result;
-}
-
-internal coordinate screen(coordinate coordinate_not_norm, int width, int height){
- 
-coordinate normalised = {};
-	
- 	normalised.x = ((coordinate_not_norm.x + 1)/2)*(real32)width  - 0.5f;
-	normalised.y = (1 - (coordinate_not_norm.y + 1)/2)*(real32)height - 0.5f;
-	normalised.z = coordinate_not_norm.z;
-return normalised;
-}
-
-internal coordinate project(real32 x, real32 y, real32 z){
-	coordinate projection = {};
-	projection.x = x/z;
-	projection.y = y/z;
-	return projection;
-}
-
-internal coordinate rotate(real32 position_x, real32 position_y, real32 position_z, real32 angle){
-	coordinate result = {};
-	real32 sine_angle   = sinf(angle);
-	real32 cosine_angle = cosf(angle);
-	result.x = (position_x * cosine_angle) - (position_z * sine_angle);
-	result.y = position_y;
-	result.z = (position_x * sine_angle) + (position_z * cosine_angle);
-	return result;
 }
 
 // parses one "vertex_index/texture_index/normal_index" style face
@@ -537,6 +510,62 @@ internal mesh* load_obj_file(game_state *GameState, game_memory *Memory, thread_
 	return destination_mesh;
 }
 
+internal transform camera_get_transform(game_state *GameState){
+	return GameState->camera_transform;
+}
+
+internal coordinate camera_get_forward(transform *camera_transform)
+{
+	real32 sine_angle   = sinf(camera_transform->rotation_yaw);
+	real32 cosine_angle = cosf(camera_transform->rotation_yaw);
+
+	coordinate forward;
+	forward.x = sine_angle;
+	forward.y = 0.0f;
+	forward.z = cosine_angle;
+	return forward;
+}
+
+internal coordinate model_to_world(coordinate model_point, transform *entity_transform){
+	coordinate result = {};
+	real32 sine_angle   = sinf(entity_transform->rotation_yaw);
+	real32 cosine_angle = cosf(entity_transform->rotation_yaw);
+	result.x = (model_point.x * cosine_angle) - (model_point.z * sine_angle) + entity_transform->position.x;
+	result.y =  model_point.y + entity_transform->position.y;
+	result.z = (model_point.x * sine_angle) + (model_point.z * cosine_angle) + entity_transform->position.z;
+	return result;
+}
+
+internal coordinate world_to_camera(coordinate world_point, transform *camera_transform){
+	coordinate translated;
+	translated.x = world_point.x - camera_transform->position.x;
+	translated.y = world_point.y - camera_transform->position.y;
+	translated.z = world_point.z - camera_transform->position.z;
+
+	coordinate result = {};
+	real32 sine_angle   = sinf(-camera_transform->rotation_yaw);
+	real32 cosine_angle = cosf(-camera_transform->rotation_yaw);
+	result.x = (translated.x * cosine_angle) - (translated.z * sine_angle);
+	result.y =  translated.y;
+	result.z = (translated.x * sine_angle) + (translated.z * cosine_angle);
+	return result;
+}
+
+internal coordinate camera_to_ndc(coordinate camera_point){
+	coordinate projection = {};
+	projection.x = camera_point.x/camera_point.z;
+	projection.y = camera_point.y/camera_point.z;
+	return projection;
+}
+
+internal coordinate ndc_to_screen(coordinate ndc_point, int width, int height){
+	coordinate normalised = {};
+ 	normalised.x = ((ndc_point.x + 1)/2)*(real32)width  - 0.5f;
+	normalised.y = (1 - (ndc_point.y + 1)/2)*(real32)height - 0.5f;
+	normalised.z = ndc_point.z;
+	return normalised;
+}
+
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	//Void unused parameter to make compiler happy
@@ -554,6 +583,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		GameState->Arena.Base = (uint8 *)Memory->TransientStorage;
 		GameState->Arena.Used = 0;		
 
+		//camera loading, standard inverse transform convention
+		GameState->camera_transform.position.z = -3.0f;
 
 		//penger loading, parsing, printf, memory freeing
 		mesh* penger_mesh_dest = load_obj_file(GameState, Memory, Thread, (char *)"real-penger.obj");
@@ -573,23 +604,43 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		Memory->IsInitialized = true;
 	};
 	temporary_memory temp_memory = TemporaryMemoryNew(&GameState->Arena);
+	real32 timedelta = Input->dtForFrame;
+	GameState->timer += timedelta;
 
 	//For loop for multiple controller
 	for(uint32 ControllerIndex = 0; ControllerIndex <(uint32)(ArrayCount(Input->Controllers)); ++ControllerIndex){
-		game_controller_input *Controller = GetController(Input, ControllerIndex);
-		if(Controller->Analog){
-		} 
-		else {
-			if(Controller->MoveLeft   .EndedDown){}
-			if(Controller->MoveRight  .EndedDown){}
-			if(Controller->MoveUp     .EndedDown){}
-			if(Controller->MoveDown   .EndedDown){}
-		}
-		
+	game_controller_input *Controller = GetController(Input, ControllerIndex);
+	if(Controller->Analog){
 	}
+	else {
+		real32 camera_speed = 3.0f;
+		coordinate forward = camera_get_forward(&GameState->camera_transform);
 
-	real32 timedelta = Input->dtForFrame;
-	GameState->timer += timedelta;
+		if(Controller->MoveUp.EndedDown){
+			GameState->camera_transform.position.x += forward.x * camera_speed * timedelta;
+			GameState->camera_transform.position.z += forward.z * camera_speed * timedelta;
+		}
+		if(Controller->MoveDown.EndedDown){
+			GameState->camera_transform.position.x -= forward.x * camera_speed * timedelta;
+			GameState->camera_transform.position.z -= forward.z * camera_speed * timedelta;
+		}
+		if(Controller->MoveLeft.EndedDown){
+			GameState->camera_transform.position.x -= forward.z * camera_speed * timedelta;
+			GameState->camera_transform.position.z += forward.x * camera_speed * timedelta;
+		}
+		if(Controller->MoveRight.EndedDown){
+			GameState->camera_transform.position.x += forward.z * camera_speed * timedelta;
+			GameState->camera_transform.position.z -= forward.x * camera_speed * timedelta;
+		}
+
+		if(Controller->RightShoulder.EndedDown){
+			GameState->camera_transform.position.y += camera_speed * timedelta;
+		}
+		if(Controller->LeftShoulder.EndedDown){
+			GameState->camera_transform.position.y -= camera_speed * timedelta;
+		}
+	}
+}
 	
 	//COLOR FORMAT IS 0xAARRGGBB (something something little endian windows something something)
 	uint32 background_color = 0xFF73BFFF;
@@ -599,26 +650,34 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	uint32 box_color = 0xFF90EE90;
 	real32 point_size = 20.0f;
 	real32 offset = 50.0f;
-	real32 camera_z = 3.0f;
 	
 	
+	transform camera_transform = camera_get_transform(GameState);
+
+
+	//quick loop for rotating by game speed
 	for(uint32 entity_index = 0; entity_index < GameState->EntityCount; ++entity_index)
 	{
-		entity *current_entity   = &GameState->Entities[entity_index];
-		mesh   *current_mesh     = current_entity->entity_mesh;
+		GameState->Entities[entity_index].transform.rotation_yaw = GameState->timer;
+	}
+
+	for(uint32 entity_index = 0; entity_index < GameState->EntityCount; ++entity_index)
+	{
+		entity *current_entity = &GameState->Entities[entity_index];
+		mesh   *current_mesh   = current_entity->entity_mesh;
 
 		coordinate *screen_points = (coordinate *)ArenaPush(&GameState->Arena, sizeof(coordinate) * current_mesh->vertex_count);
 
 		for(uint32 vertex_index = 0; vertex_index < current_mesh->vertex_count; ++vertex_index)
 		{
-			coordinate *source_vertex      = &current_mesh->vertices[vertex_index];
-			coordinate rotated_vertex      = rotate(source_vertex->x, source_vertex->y, source_vertex->z, GameState->timer /*+ current_entity->rotation_yaw*/);
-			coordinate projected_vertex    = project(rotated_vertex.x + current_entity->position.x, rotated_vertex.y + current_entity->position.y,
-													rotated_vertex.z + current_entity->position.z + camera_z);
-			coordinate screen_space_vertex = screen(projected_vertex, Buffer->Width, Buffer->Height);
+			coordinate *source_vertex = &current_mesh->vertices[vertex_index];
 
-			/*screen_space_vertex.y += 200.0f; manual penger pixelbased adjustment*/
-			screen_points[vertex_index] = screen_space_vertex;
+			coordinate world_point = model_to_world(*source_vertex, &current_entity->transform);
+			coordinate camera_point = world_to_camera(world_point, &camera_transform);
+			coordinate ndc_point    = camera_to_ndc(camera_point);
+			coordinate pixel_point  = ndc_to_screen(ndc_point, Buffer->Width, Buffer->Height);
+
+			screen_points[vertex_index] = pixel_point;
 		}
 
 		for(uint32 face_index = 0; face_index < current_mesh->face_count; ++face_index)
