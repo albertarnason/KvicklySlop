@@ -307,13 +307,13 @@ PlatformProcessPendingEvents(platform_state *State, game_controller_input *Keybo
 			case SDL_EVENT_KEY_UP:
 			{
 				bool32 IsDown = (Event.type == SDL_EVENT_KEY_DOWN);
-				bool32 WasDown = (Event.key.repeat != 0);
+				bool32 IsRepeat = (Event.key.repeat != 0);
 
 				// TODO: map Event.key.scancode to KeyboardController buttons,
 				// e.g.:
 				// if (Event.key.scancode == SDL_SCANCODE_W)
 				//     Win32ProcessKeyboardMessage(&KeyboardController->MoveUp, IsDown);
-				if (WasDown != IsDown)
+				if (!IsRepeat)
 				{
 					if      (Event.key.scancode == SDL_SCANCODE_W)        { SDLProcessKeyboardMessage(&KeyboardController->MoveUp, 	     IsDown);}
 					else if (Event.key.scancode == SDL_SCANCODE_A)        { SDLProcessKeyboardMessage(&KeyboardController->MoveLeft, 	 IsDown);}

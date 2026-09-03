@@ -243,7 +243,21 @@ struct coordinate{
     real32 z;
 };
 
+//conventional name for position + rotation (from model to world space) + size
+struct transform
+{
+    coordinate position;
+    real32     rotation_yaw; 
+    //uint32 size
+};
 
+struct camera
+{
+    transform transform;
+    real32    fov;
+    real32    near_plane;
+    real32    far_plane;
+};
 //max meshes
 #define MAX_MESHES 16
 
@@ -265,28 +279,24 @@ struct mesh
 #define MAX_ENTITIES 1024
 
 struct entity{
-    coordinate position;
+    transform transform;
     mesh *entity_mesh;
     uint32 color;
 
     bool32 IsActive;
 };
 
-struct game_state{
-    uint32 EntityCount;
-    entity Entities[MAX_ENTITIES];
 
-    uint32 MeshCount;
-    mesh Meshes[MAX_MESHES];
-    
-    real32 timer;
-    coordinate coordinates;
-
-    //only used for sound example
-    real32 tSine;
-
-    //arena is important
+struct game_state
+{
     memory_arena Arena;
+    real32       timer;
+    transform    camera_transform; 
+    real32       tSine;
+    entity       Entities[MAX_ENTITIES];
+    uint32       EntityCount;
+    mesh         Meshes[MAX_MESHES];
+    uint32       MeshCount;
 };
 
 
