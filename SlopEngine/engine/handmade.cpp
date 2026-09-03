@@ -559,7 +559,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		mesh* penger_mesh_dest = load_obj_file(GameState, Memory, Thread, (char *)"real-penger.obj");
 		coordinate penger_world_coordinate  = {1.0f, 0.0f, 0.0f};
 		coordinate penger_world_coordinate2 = {0.0f, 0.0f, 0.0f};
-		coordinate penger_world_coordinate3 = {-1.0f, 0.0f, 0.0f};
+		coordinate penger_world_coordinate3 = {-2.0f, -1.5f, 2.0f};
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate , 0xFF90EE90);
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate2, 0xFFFF9090); // second penger, different position
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate3, 0xFF9090FF); // different model entirely
@@ -604,35 +604,35 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	
 	for(uint32 entity_index = 0; entity_index < GameState->EntityCount; ++entity_index)
 	{
-	entity *current_entity   = &GameState->Entities[entity_index];
-	mesh   *current_mesh     = current_entity->entity_mesh;
+		entity *current_entity   = &GameState->Entities[entity_index];
+		mesh   *current_mesh     = current_entity->entity_mesh;
 
-	coordinate *screen_points = (coordinate *)ArenaPush(&GameState->Arena, sizeof(coordinate) * current_mesh->vertex_count);
+		coordinate *screen_points = (coordinate *)ArenaPush(&GameState->Arena, sizeof(coordinate) * current_mesh->vertex_count);
 
-	for(uint32 vertex_index = 0; vertex_index < current_mesh->vertex_count; ++vertex_index)
-	{
-		coordinate *source_vertex      = &current_mesh->vertices[vertex_index];
-		coordinate rotated_vertex      = rotate(source_vertex->x, source_vertex->y, source_vertex->z, GameState->timer /*+ current_entity->rotation_yaw*/);
-		coordinate projected_vertex    = project(rotated_vertex.x + current_entity->position.x, rotated_vertex.y + current_entity->position.y,
-												 rotated_vertex.z + current_entity->position.z + camera_z);
-		coordinate screen_space_vertex = screen(projected_vertex, Buffer->Width, Buffer->Height);
-
-		/*screen_space_vertex.y += 200.0f; manual penger pixelbased adjustment*/
-		screen_points[vertex_index] = screen_space_vertex;
-	}
-
-	for(uint32 face_index = 0; face_index < current_mesh->face_count; ++face_index)
-	{
-		mesh_face *current_face = &current_mesh->faces[face_index];
-		for(uint32 face_vertex_index = 0; face_vertex_index < current_face->vertex_count; ++face_vertex_index)
+		for(uint32 vertex_index = 0; vertex_index < current_mesh->vertex_count; ++vertex_index)
 		{
-			int32 vertex_a = current_face->vertex_index[face_vertex_index];
-			int32 vertex_b = current_face->vertex_index[(face_vertex_index + 1) % current_face->vertex_count];
+			coordinate *source_vertex      = &current_mesh->vertices[vertex_index];
+			coordinate rotated_vertex      = rotate(source_vertex->x, source_vertex->y, source_vertex->z, GameState->timer /*+ current_entity->rotation_yaw*/);
+			coordinate projected_vertex    = project(rotated_vertex.x + current_entity->position.x, rotated_vertex.y + current_entity->position.y,
+													rotated_vertex.z + current_entity->position.z + camera_z);
+			coordinate screen_space_vertex = screen(projected_vertex, Buffer->Width, Buffer->Height);
 
-			DrawLine(Buffer, screen_points[vertex_a], screen_points[vertex_b], current_entity->color);
+			/*screen_space_vertex.y += 200.0f; manual penger pixelbased adjustment*/
+			screen_points[vertex_index] = screen_space_vertex;
+		}
+
+		for(uint32 face_index = 0; face_index < current_mesh->face_count; ++face_index)
+		{
+			mesh_face *current_face = &current_mesh->faces[face_index];
+			for(uint32 face_vertex_index = 0; face_vertex_index < current_face->vertex_count; ++face_vertex_index)
+			{
+				int32 vertex_a = current_face->vertex_index[face_vertex_index];
+				int32 vertex_b = current_face->vertex_index[(face_vertex_index + 1) % current_face->vertex_count];
+
+				DrawLine(Buffer, screen_points[vertex_a], screen_points[vertex_b], current_entity->color);
+			}
 		}
 	}
-}
 
 
 
