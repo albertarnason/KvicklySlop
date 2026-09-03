@@ -253,7 +253,7 @@ struct transform
 
 struct camera
 {
-    transform transform;
+    transform camera_transform;
     real32    fov;
     real32    near_plane;
     real32    far_plane;
@@ -279,7 +279,7 @@ struct mesh
 #define MAX_ENTITIES 1024
 
 struct entity{
-    transform transform;
+    transform entity_transform;
     mesh *entity_mesh;
     uint32 color;
 
