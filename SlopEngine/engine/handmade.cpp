@@ -286,10 +286,10 @@ internal void spawn_entity(game_state *GameState, mesh *entity_mesh, coordinate 
 {
 	Assert(GameState->EntityCount < MAX_ENTITIES);
 
-	entity *new_entity        			= &GameState->Entities[GameState->EntityCount++];
-	new_entity->transform.position      = spawn_position;
-	new_entity->entity_mesh   			= entity_mesh;
-	new_entity->color         			= entity_color;
+	entity *new_entity        				= &GameState->Entities[GameState->EntityCount++];
+	new_entity->entity_transform.position	= spawn_position;
+	new_entity->entity_mesh   				= entity_mesh;
+	new_entity->color         				= entity_color;
 }
 
 internal temporary_memory TemporaryMemoryNew (memory_arena *Arena){
@@ -667,7 +667,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	//quick loop for rotating by game speed
 	for(uint32 entity_index = 0; entity_index < GameState->EntityCount; ++entity_index)
 	{
-		GameState->Entities[entity_index].transform.rotation_yaw = GameState->timer;
+		GameState->Entities[entity_index].entity_transform.rotation_yaw = GameState->timer;
 	}
 
 	for(uint32 entity_index = 0; entity_index < GameState->EntityCount; ++entity_index)
@@ -681,7 +681,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		{
 			coordinate *source_vertex = &current_mesh->vertices[vertex_index];
 
-			coordinate world_point = model_to_world(*source_vertex, &current_entity->transform);
+			coordinate world_point = model_to_world(*source_vertex, &current_entity->entity_transform);
 			coordinate camera_point = world_to_camera(world_point, &camera_transform);
 			coordinate ndc_point    = camera_to_ndc(camera_point);
 			coordinate pixel_point  = ndc_to_screen(ndc_point, Buffer->Width, Buffer->Height);
