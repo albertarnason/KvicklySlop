@@ -513,6 +513,8 @@ internal mesh* load_obj_file(game_state *GameState, game_memory *Memory, thread_
 	mesh *destination_mesh = &GameState->Meshes[GameState->MeshCount++];
 	parse_obj_into_mesh(&GameState->Arena, (char *)loaded_obj.Contents, loaded_obj.ContentsSize, destination_mesh);
 
+	//TODO: Parse QUADS into Triangles
+
 	center_mesh_on_origin(destination_mesh);
 	printf("OBJ parsed: %d vertices, %d faces\n", destination_mesh->vertex_count, destination_mesh->face_count);
 	Assert(destination_mesh->vertex_count > 0); // catch a file that loaded but parsed to nothing
