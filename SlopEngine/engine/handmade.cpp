@@ -203,8 +203,8 @@ internal void DrawPixel(game_offscreen_buffer *buffer, int32 pixel_x, int32 pixe
 
 internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordinate point_b, uint32 color){
     
+
 	// Limits rendering space to within window size + 200 pixel edge buffer,
-	//TODO: extract into function, place before ANY draw calls
 	real32 pixel_edge_buffer = 200;
 	if(point_a.x < -pixel_edge_buffer || point_a.x >= (real32)buffer->Width  + pixel_edge_buffer) { return; }
     if(point_a.y < -pixel_edge_buffer || point_a.y >= (real32)buffer->Height + pixel_edge_buffer) { return; }
@@ -333,29 +333,84 @@ internal void *ArenaPushZero(memory_arena *Arena, size_t Size)
     return Result;
 }
 
-// parses one "vertex_index/texture_index/normal_index" style face
-// reference and returns only the position index, since mesh_face does
-// not store texture or normal indices
-internal int32 parse_face_vertex_reference(char **current_position_pointer, char *line_end)
+internal int32 resolve_obj_index(int32 obj_index, uint32 count)
+{
+	int32 resolved_index;
+
+	if(obj_index > 0){
+		resolved_index = obj_index - 1;
+	}
+	else if(obj_index < 0){
+		resolved_index = (int32)count + obj_index;
+	}
+	else{
+		Assert(!"OBJ index cannot be zero");
+		return -1;
+	}
+
+	Assert(resolved_index >= 0);
+	Assert(resolved_index < (int32)count);
+
+	return resolved_index;
+}
+
+
+internal obj_face_vertex parse_face_vertex_reference(
+	char **current_position_pointer,
+	char *line_end,
+	uint32 vertex_count,
+	uint32 texture_count,
+	uint32 normal_count)
 {
 	char *current_position = *current_position_pointer;
 
-	int32 one_based_vertex_index = string_to_integer(&current_position, line_end);
+	obj_face_vertex result = {};
 
-	// skip past any "/texture_index/normal_index" that follows
+	result.vertex_index  = -1;
+	result.texture_index = -1;
+	result.normal_index  = -1;
+
+	// vertex index
+	int32 obj_vertex_index = string_to_integer(&current_position, line_end);
+	result.vertex_index    = resolve_obj_index(obj_vertex_index, vertex_count);
+
+	if(current_position < line_end && *current_position == '/')
+	{
+		++current_position;
+
+		// texture index
+		if(current_position < line_end &&*current_position != '/'){
+			int32 obj_texture_index = string_to_integer(&current_position, line_end);
+			result.texture_index    = resolve_obj_index(obj_texture_index,texture_count);
+		}
+
+		// normal index
+		if(current_position < line_end &&*current_position == '/'){
+			++current_position;
+
+			if(current_position < line_end && !character_is_whitespace(*current_position)){
+				int32 obj_normal_index = string_to_integer(&current_position, line_end);
+				result.normal_index    = resolve_obj_index(obj_normal_index, normal_count);
+			}
+		}
+	}
+
 	while(current_position < line_end && !character_is_whitespace(*current_position))
 	{
 		++current_position;
 	}
 
 	*current_position_pointer = current_position;
-	return one_based_vertex_index - 1; // OBJ indices are 1-based
+
+	return result;
 }
 
-internal void count_obj_lines(char *file_data, size_t file_data_size, uint32 *out_vertex_count, uint32 *out_face_count)
+internal void count_obj_lines(char *file_data, size_t file_data_size, uint32 *out_vertex_count, uint32 *out_face_count, uint32 *out_normal_count, uint32 *out_texture_count)
 {
-	uint32 vertex_count = 0;
-	uint32 face_count   = 0;
+	uint32 vertex_count  = 0;
+	uint32 face_count    = 0;
+	uint32 normal_count  = 0;
+	uint32 texture_count = 0;
 
 	char *current_position = file_data;
 	char *file_end         = file_data + file_data_size;
@@ -369,7 +424,9 @@ internal void count_obj_lines(char *file_data, size_t file_data_size, uint32 *ou
 			++current_position;
 		}
 
-		if(line_start < file_end)
+		uint64 line_length = (uint64)(current_position - line_start);
+
+		if(line_length >= 2)
 		{
 			if(line_start[0] == 'v' && line_start[1] == ' ')
 			{
@@ -379,15 +436,28 @@ internal void count_obj_lines(char *file_data, size_t file_data_size, uint32 *ou
 			{
 				++face_count;
 			}
+			else if(line_length >= 3 && line_start[0] == 'v' && line_start[1] == 'n' && line_start[2] == ' ')
+			{
+				++normal_count;
+			}
+			else if(line_length >= 3 && line_start[0] == 'v' && line_start[1] == 't' && line_start[2] == ' ')
+			{
+				++texture_count;
+			}
 			// NOTE: 'vn ' and 'vt ' lines are naturally excluded above
 			// since their second character is not a space.
 		}
 
-		++current_position; // skip the '\n'
+			if(current_position < file_end)
+		{
+			++current_position;
+		}
 	}
 
-	*out_vertex_count = vertex_count;
-	*out_face_count   = face_count;
+	*out_vertex_count  =  vertex_count;
+	*out_face_count    =    face_count;
+	*out_normal_count  =  normal_count;
+	*out_texture_count = texture_count;
 }
 
 internal void parse_obj_into_mesh(memory_arena *arena, char *file_data, size_t file_data_size, mesh *output_mesh)
@@ -395,15 +465,21 @@ internal void parse_obj_into_mesh(memory_arena *arena, char *file_data, size_t f
 
 	Assert(file_data);
 	Assert(file_data_size > 0);
-	// ---- PASS 1: count vertices and faces so the arena allocation is exact ----
+	// ---- PASS 1: count vertices, faces, textures, normals, faces so the arena allocation is exact ----
 	uint32 total_vertex_count = 0;
-	uint32 total_face_count   = 0;
-	count_obj_lines(file_data, file_data_size, &total_vertex_count, &total_face_count);
+	uint32 total_texture_coordinate_count = 0;
+	uint32 total_normal_count = 0;
+	uint32 total_face_count = 0;
+	count_obj_lines(file_data, file_data_size, &total_vertex_count, &total_face_count, &total_normal_count, &total_texture_coordinate_count);
 
-	output_mesh->vertices     = (coordinate *)ArenaPush(arena, sizeof(coordinate) * total_vertex_count);
-	output_mesh->faces        = (mesh_face *)ArenaPush(arena, sizeof(mesh_face) * total_face_count);
+	output_mesh->vertices   		 = (coordinate*)ArenaPush(arena, sizeof(coordinate) * total_vertex_count);
+	output_mesh->faces        		 = (mesh_face *)ArenaPush(arena, sizeof(mesh_face ) * total_face_count  );
+	output_mesh->normals	 		 = (coordinate*)ArenaPush(arena, sizeof(coordinate) * total_normal_count);
+	output_mesh->texture_coordinates = (texture_coordinate*)ArenaPush(arena, sizeof(texture_coordinate) * total_texture_coordinate_count);
 	output_mesh->vertex_count = 0;
 	output_mesh->face_count   = 0;
+	output_mesh->normal_count = 0;
+	output_mesh->texture_count= 0;
 
 	// ---- PASS 2: fill vertices and faces ----
 	char *current_position = file_data;
@@ -418,14 +494,18 @@ internal void parse_obj_into_mesh(memory_arena *arena, char *file_data, size_t f
 			++current_position;
 		}
 		char *line_end = current_position; // exclusive
-		++current_position;                // skip '\n' for next iteration
-
-		if(line_start >= line_end)
+		if(current_position < file_end)
 		{
-			continue; // empty line
+			++current_position;
 		}
 
-		if(line_start[0] == 'v' && line_start[1] == ' ')
+		uint64 line_length = (uint64)(line_end - line_start);
+		if(line_length == 0)
+		{
+			continue;
+		}
+
+		if(line_length >= 2 && line_start[0] == 'v' && line_start[1] == ' ')
 		{
 			char *parse_position = line_start + 2; // skip "v "
 
@@ -438,7 +518,7 @@ internal void parse_obj_into_mesh(memory_arena *arena, char *file_data, size_t f
 			destination_vertex->y = vertex_y;
 			destination_vertex->z = vertex_z;
 		}
-		else if(line_start[0] == 'f' && line_start[1] == ' ')
+		else if(line_length >= 2 && line_start[0] == 'f' && line_start[1] == ' ')
 		{
 			char *parse_position = line_start + 2; // skip "f "
 
@@ -456,14 +536,53 @@ internal void parse_obj_into_mesh(memory_arena *arena, char *file_data, size_t f
 					break;
 				}
 
-				int32 vertex_index = parse_face_vertex_reference(&parse_position, line_end);
-				destination_face->vertex_index[destination_face->vertex_count++] = vertex_index;
+				obj_face_vertex reference = parse_face_vertex_reference(&parse_position, line_end, output_mesh->vertex_count, output_mesh->texture_count, output_mesh->normal_count);
+				uint32 vertex = destination_face->vertex_count++;
+				destination_face->vertex_index[vertex]  = reference.vertex_index;
+				destination_face->normal_index[vertex]  = reference.normal_index;
+				destination_face->texture_index[vertex] = reference.texture_index;
 			}
+		}
+		else if(line_length >= 3 && line_start[0] == 'v' && line_start[1] == 'n' && line_start[2] == ' ')
+		{
+			char *parse_position = line_start + 3;
+
+			real32 normal_x = string_to_float(&parse_position, line_end);
+			real32 normal_y = string_to_float(&parse_position, line_end);
+			real32 normal_z = string_to_float(&parse_position, line_end);
+
+			coordinate *destination = &output_mesh->normals[output_mesh->normal_count++];
+
+			destination->x = normal_x;
+			destination->y = normal_y;
+			destination->z = normal_z;
+		}
+		else if(line_length >= 3 && line_start[0] == 'v' && line_start[1] == 't' && line_start[2] == ' ')
+		{
+			char *parse_position = line_start + 3;
+
+			real32 texture_u = string_to_float(&parse_position, line_end);
+			real32 texture_v = string_to_float(&parse_position, line_end);
+			real32 texture_w = 0.0f;
+			// W is optional in OBJ.
+			if(parse_position < line_end){
+				texture_w = string_to_float(&parse_position, line_end);
+			}
+
+			texture_coordinate *destination =
+				&output_mesh->texture_coordinates[
+					output_mesh->texture_count++];
+
+			destination->u = texture_u;
+			destination->v = texture_v;
+			destination->w = texture_w;
 		}
 	}
 
 	Assert(output_mesh->vertex_count == total_vertex_count);
 	Assert(output_mesh->face_count   == total_face_count);
+	Assert(output_mesh->normal_count == total_normal_count);
+	Assert(output_mesh->texture_count == total_texture_coordinate_count);
 }
 
 internal void center_mesh_on_origin(mesh *target_mesh)
@@ -514,9 +633,8 @@ internal mesh* load_obj_file(game_state *GameState, game_memory *Memory, thread_
 	parse_obj_into_mesh(&GameState->Arena, (char *)loaded_obj.Contents, loaded_obj.ContentsSize, destination_mesh);
 
 	//TODO: Parse QUADS into Triangles
-
 	center_mesh_on_origin(destination_mesh);
-	printf("OBJ parsed: %d vertices, %d faces\n", destination_mesh->vertex_count, destination_mesh->face_count);
+	printf("OBJ parsed: %d vertices, %d faces, %d normals, %d textures\n", destination_mesh->vertex_count, destination_mesh->face_count, destination_mesh->normal_count, destination_mesh->texture_count);
 	Assert(destination_mesh->vertex_count > 0); // catch a file that loaded but parsed to nothing
 	Assert(destination_mesh->face_count > 0);
 
@@ -638,13 +756,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		coordinate penger_world_coordinate7 = {0.0f, 100.0f, -1.0f};
 
 
-		//spawn_entity(GameState, bugatti_mesh_dest, bugatti_world_coordinate , 0xFF90EE90);
-		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate2, 0xFFFF9090);
+		spawn_entity(GameState, bugatti_mesh_dest, bugatti_world_coordinate , 0xFF90EE90);
+		/*spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate2, 0xFFFF9090);
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate3, 0xFF9090FF);
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate4, 0xFF9090FF); 
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate5, 0xFF9090FF); 
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate6, 0xFF9090FF); 
-		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate7, 0xFF9090FF); 
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate7, 0xFF9090FF);*/
 
 
 		
@@ -659,7 +777,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	GameState->timer += timedelta;
 	
 	
-	real32 camera_speed = 30.0f;
+	real32 camera_speed = 3.0f;
 	real32 camera_rotation_speed = 2.0f;
 	//For loop for multiple controller
 	for(uint32 ControllerIndex = 0; ControllerIndex <(uint32)(ArrayCount(Input->Controllers)); ++ControllerIndex){
@@ -748,6 +866,15 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 
 				coordinate pixel_a = ndc_to_screen(camera_to_ndc(camera_a), (uint32)Buffer->Width, (uint32)Buffer->Height);
 				coordinate pixel_b = ndc_to_screen(camera_to_ndc(camera_b), (uint32)Buffer->Width, (uint32)Buffer->Height);
+
+					// Limits rendering space to within window size + 200 pixel edge buffer,
+				real32 pixel_edge_buffer = 200;
+				if(pixel_a.x < -pixel_edge_buffer || pixel_a.x >= (real32)Buffer->Width  + pixel_edge_buffer) { continue; }
+				if(pixel_a.y < -pixel_edge_buffer || pixel_a.y >= (real32)Buffer->Height + pixel_edge_buffer) { continue; }
+
+				if(pixel_b.x < -pixel_edge_buffer || pixel_b.x >= (real32)Buffer->Width  + pixel_edge_buffer) { continue; }
+				if(pixel_b.y < -pixel_edge_buffer || pixel_b.y >= (real32)Buffer->Height + pixel_edge_buffer) { continue; }
+
 
 				DrawLine(Buffer, pixel_a, pixel_b, current_entity->color);
 			}
