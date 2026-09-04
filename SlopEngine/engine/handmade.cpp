@@ -684,30 +684,7 @@ internal coordinate world_to_camera(coordinate world_point, transform *camera_tr
 	return result;
 }
 
-internal bool32 clip_edge_to_near_plane(coordinate *camera_point_a, coordinate *camera_point_b, real32 near_plane){
 
-	if (camera_point_a->z < near_plane && camera_point_b->z < near_plane){
-		return false;
-	}
-
-	if (camera_point_a->z < near_plane){
-		real32 t = (near_plane - camera_point_a->z) / (camera_point_b->z - camera_point_a->z);
-		camera_point_a->x = camera_point_a->x + t * (camera_point_b->x - camera_point_a->x);
-		camera_point_a->y = camera_point_a->y + t * (camera_point_b->y - camera_point_a->y);
-		camera_point_a->z = near_plane;
-	}
-
-	if (camera_point_b->z < near_plane){
-		real32 t = (near_plane - camera_point_b->z) / (camera_point_a->z - camera_point_b->z);
-		camera_point_b->x = camera_point_b->x + t * (camera_point_a->x - camera_point_b->x);
-		camera_point_b->y = camera_point_b->y + t * (camera_point_a->y - camera_point_b->y);
-		camera_point_b->z = near_plane;
-	}
-
-	return true;
-}
-// returns false if the edge should be discarded entirely (both points behind)
-// otherwise adjusts whichever endpoint is behind the near plane in-place
 
 internal coordinate camera_to_ndc(coordinate camera_point){
 	coordinate projection = {};
@@ -827,6 +804,93 @@ internal void ScanFill(game_offscreen_buffer *Buffer, coordinate a, coordinate b
 			pixel_counter++;
 		}
 	}	
+
+}
+
+internal bool32 clip_edge_to_near_plane(coordinate *camera_point_a, coordinate *camera_point_b, real32 near_plane){
+
+	if (camera_point_a->z < near_plane && camera_point_b->z < near_plane){
+		return false;
+	}
+
+	if (camera_point_a->z < near_plane){
+		real32 t = (near_plane - camera_point_a->z) / (camera_point_b->z - camera_point_a->z);
+		camera_point_a->x = camera_point_a->x + t * (camera_point_b->x - camera_point_a->x);
+		camera_point_a->y = camera_point_a->y + t * (camera_point_b->y - camera_point_a->y);
+		camera_point_a->z = near_plane;
+	}
+
+	if (camera_point_b->z < near_plane){
+		real32 t = (near_plane - camera_point_b->z) / (camera_point_a->z - camera_point_b->z);
+		camera_point_b->x = camera_point_b->x + t * (camera_point_a->x - camera_point_b->x);
+		camera_point_b->y = camera_point_b->y + t * (camera_point_a->y - camera_point_b->y);
+		camera_point_b->z = near_plane;
+	}
+
+	return true;
+}
+// returns false if the edge should be discarded entirely (both points behind)
+// otherwise adjusts whichever endpoint is behind the near plane in-place
+
+internal coordinate edge_intersect_near_plane (coordinate from, coordinate to, real32 near_plane){
+	real32 t = (near_plane - from.z) /(to.z - from.z);
+	coordinate result;
+	result.x = from.x + t * (to.x - from.x);
+	result.y = from.y + t * (to.y - from.y);
+	result.z = near_plane;
+	return result;
+}
+
+internal uint32 clip_triangle_to_near_plane(coordinate a,coordinate b,coordinate c, real32 near_plane, coordinate *out_triangles){
+	coordinate vertex[3] = {a, b, c};
+	bool32 behind[3] = {vertex[0].z < near_plane, vertex[1].z < near_plane, vertex[2].z < near_plane };
+	uint32 behind_count = uint32((int32)behind[0] + (int32)behind[1] + (int32)behind[2]);
+
+	if(behind_count == 0){
+		out_triangles[0] = a;
+		out_triangles[1] = b;
+		out_triangles[2] = c;
+		return 1;
+	}
+	
+	if(behind_count == 3){
+		return 0;
+	}
+
+	// Rotate winding so index 0 is the "odd one out" (the lone behind, or the lone in-front
+	// for the cases where 1 or 2 vertices have z value too close to near_plane)
+	uint32 rotate = 0;
+	if(behind_count == 1){
+		if(behind[1]){rotate = 1;}
+		else if (behind[2]){rotate = 2;}
+	}
+	else{
+		if(!behind[1]){rotate = 1;}
+		else if (!behind[2]){rotate = 2;}
+	}
+
+	coordinate p0 = vertex[(rotate + 0) % 3];
+	coordinate p1 = vertex[(rotate + 1) % 3];
+	coordinate p2 = vertex[(rotate + 2) % 3];
+
+	coordinate intersect_01 = edge_intersect_near_plane(p0, p1, near_plane);
+	coordinate intersect_02 = edge_intersect_near_plane(p0, p2, near_plane);
+
+	if (behind_count == 1){
+		out_triangles[0] = intersect_01; 
+		out_triangles[1] = p1;
+		out_triangles[2] = p2;
+		out_triangles[3] = intersect_01;
+		out_triangles[4] = p2;
+		out_triangles[5] = intersect_02;
+		return 2;
+	}
+	else{
+		out_triangles[0] = p0; 
+		out_triangles[1] = intersect_01; 
+		out_triangles[2] = intersect_02;
+		return 1;
+	}
 
 }
 
@@ -966,27 +1030,31 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 			coordinate camera_b = world_to_camera(world_b, &camera_transform);
 			coordinate camera_c = world_to_camera(world_c, &camera_transform);
 
-			if(!clip_edge_to_near_plane(&camera_a, &camera_b, near_plane))
-			{
-					continue; // whole edge behind camera, skip drawing it
+			coordinate clipped[6];
+			uint32 clipped_triangle_count = clip_triangle_to_near_plane(camera_a, camera_b, camera_c, near_plane, clipped);
+
+			for(uint32 clip_index = 0; clip_index < clipped_triangle_count; ++clip_index){
+				coordinate tri_a = clipped[clip_index * 3 + 0];
+				coordinate tri_b = clipped[clip_index * 3 + 1];
+				coordinate tri_c = clipped[clip_index * 3 + 2];
+
+				coordinate pixel_a = ndc_to_screen(camera_to_ndc(tri_a), (uint32)Buffer->Width, (uint32)Buffer->Height);
+				coordinate pixel_b = ndc_to_screen(camera_to_ndc(tri_b), (uint32)Buffer->Width, (uint32)Buffer->Height);
+				coordinate pixel_c = ndc_to_screen(camera_to_ndc(tri_c), (uint32)Buffer->Width, (uint32)Buffer->Height);
+
+					// Limits rendering space to within window size + 200 pixel edge buffer,
+				real32 pixel_edge_buffer = 200;
+				if(pixel_a.x < -pixel_edge_buffer || pixel_a.x >= (real32)Buffer->Width  + pixel_edge_buffer) { continue; }
+				if(pixel_a.y < -pixel_edge_buffer || pixel_a.y >= (real32)Buffer->Height + pixel_edge_buffer) { continue; }
+
+				if(pixel_b.x < -pixel_edge_buffer || pixel_b.x >= (real32)Buffer->Width  + pixel_edge_buffer) { continue; }
+				if(pixel_b.y < -pixel_edge_buffer || pixel_b.y >= (real32)Buffer->Height + pixel_edge_buffer) { continue; }
+
+				if(pixel_c.x < -pixel_edge_buffer || pixel_c.x >= (real32)Buffer->Width  + pixel_edge_buffer) { continue; }
+				if(pixel_c.y < -pixel_edge_buffer || pixel_c.y >= (real32)Buffer->Height + pixel_edge_buffer) { continue; }
+
+				ScanFill(Buffer, pixel_a, pixel_b, pixel_c, current_entity->color);
 			}
-
-			coordinate pixel_a = ndc_to_screen(camera_to_ndc(camera_a), (uint32)Buffer->Width, (uint32)Buffer->Height);
-			coordinate pixel_b = ndc_to_screen(camera_to_ndc(camera_b), (uint32)Buffer->Width, (uint32)Buffer->Height);
-			coordinate pixel_c = ndc_to_screen(camera_to_ndc(camera_c), (uint32)Buffer->Width, (uint32)Buffer->Height);
-
-				// Limits rendering space to within window size + 200 pixel edge buffer,
-			real32 pixel_edge_buffer = 200;
-			if(pixel_a.x < -pixel_edge_buffer || pixel_a.x >= (real32)Buffer->Width  + pixel_edge_buffer) { continue; }
-			if(pixel_a.y < -pixel_edge_buffer || pixel_a.y >= (real32)Buffer->Height + pixel_edge_buffer) { continue; }
-
-			if(pixel_b.x < -pixel_edge_buffer || pixel_b.x >= (real32)Buffer->Width  + pixel_edge_buffer) { continue; }
-			if(pixel_b.y < -pixel_edge_buffer || pixel_b.y >= (real32)Buffer->Height + pixel_edge_buffer) { continue; }
-
-			if(pixel_c.x < -pixel_edge_buffer || pixel_c.x >= (real32)Buffer->Width  + pixel_edge_buffer) { continue; }
-			if(pixel_c.y < -pixel_edge_buffer || pixel_c.y >= (real32)Buffer->Height + pixel_edge_buffer) { continue; }
-
-			ScanFill(Buffer, pixel_a, pixel_b, pixel_c, current_entity->color);
 		}
 	}
  /*
