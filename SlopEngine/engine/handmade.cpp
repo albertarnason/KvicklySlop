@@ -627,6 +627,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 
 		//penger loading, parsing, printf, memory freeing
 		mesh* penger_mesh_dest = load_obj_file(GameState, Memory, Thread, (char *)"real-penger.obj");
+		mesh* bugatti_mesh_dest = load_obj_file(GameState, Memory, Thread, (char *)"Bugatti-Veyron.obj");
+		coordinate bugatti_world_coordinate = {1.0f, 1.0f, 1.0f};
 		coordinate penger_world_coordinate  = {1.0f, -1.0f, 0.0f};
 		coordinate penger_world_coordinate2 = {0.0f, 0.0f, 0.0f};
 		coordinate penger_world_coordinate3 = {2.0f, 10.0f, -1.0f};
@@ -636,7 +638,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		coordinate penger_world_coordinate7 = {0.0f, 100.0f, -1.0f};
 
 
-		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate , 0xFF90EE90);
+		//spawn_entity(GameState, bugatti_mesh_dest, bugatti_world_coordinate , 0xFF90EE90);
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate2, 0xFFFF9090);
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate3, 0xFF9090FF);
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate4, 0xFF9090FF); 
@@ -657,7 +659,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	GameState->timer += timedelta;
 	
 	
-	real32 camera_speed = 3.0f;
+	real32 camera_speed = 30.0f;
 	real32 camera_rotation_speed = 2.0f;
 	//For loop for multiple controller
 	for(uint32 ControllerIndex = 0; ControllerIndex <(uint32)(ArrayCount(Input->Controllers)); ++ControllerIndex){

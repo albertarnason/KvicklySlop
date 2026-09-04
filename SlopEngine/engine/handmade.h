@@ -248,7 +248,7 @@ struct transform
 {
     coordinate position;
     real32     rotation_yaw; 
-    //uint32 size
+    //uint32 scale
 };
 
 struct camera
