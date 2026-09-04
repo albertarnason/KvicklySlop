@@ -763,7 +763,12 @@ internal void ScanFill(game_offscreen_buffer *Buffer, coordinate a, coordinate b
 
 	real32 x_pos_left;
 	real32 x_pos_right;
-	for(uint32 scan_index = 0; scan_index < uint32(bound_y_max.y - bound_y_mid.y); ++scan_index){
+	int32 y_top = RoundReal32ToInt32(bound_y_max.y);
+	int32 y_mid = RoundReal32ToInt32(bound_y_mid.y);
+	int32 y_bot = RoundReal32ToInt32(bound_y_min.y);
+
+	//Splits A triangle into two parts, top part (from y_top to y_mid), fills pixels within it
+	for(uint32 scan_index = 0; scan_index < uint32(y_top - y_mid); ++scan_index){
 		real32 current_y = bound_y_max.y - scan_index;
 
 		real32 x_pos_1 = x_at_y(bound_y_mid, bound_y_max, slope_short_top, current_y);
@@ -784,7 +789,8 @@ internal void ScanFill(game_offscreen_buffer *Buffer, coordinate a, coordinate b
 		}
 	}	
 
-	for(uint32 scan_index = 0; scan_index < uint32(bound_y_mid.y - bound_y_min.y); ++scan_index){
+	//2nd triangle part from y_mid to y_min
+	for(uint32 scan_index = 0; scan_index < uint32(y_mid - y_bot); ++scan_index){
 		real32 current_y = bound_y_mid.y - scan_index;
 
 		real32 x_pos_1 = x_at_y(bound_y_mid, bound_y_min, slope_short_bot, current_y);
