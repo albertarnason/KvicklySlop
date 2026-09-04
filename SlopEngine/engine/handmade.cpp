@@ -173,6 +173,8 @@ uint32 ColorWithAlpha(uint32 color, real32 normalized_alpha){
 internal uint32 BlendPixel(uint32 source_color, uint32 destination_color){
     // extract alpha from source as 0-1 float
     real32 source_alpha = (real32)((source_color >> 24) & 0xFF) / 255.0f;
+	// fully opaque - skip the blend math entirely
+    if(source_alpha >= 1.0f){return source_color & 0x00FFFFFF;}
 
     // extract rgb channels from source and destination
     uint8 source_red   = (source_color >> 16) & 0xFF;
@@ -196,6 +198,7 @@ internal void DrawPixel(game_offscreen_buffer *buffer, int32 pixel_x, int32 pixe
     if(pixel_x < 0 || pixel_x >= buffer->Width)  { return; }
     if(pixel_y < 0 || pixel_y >= buffer->Height) { return; }
 
+	
     // compute pixel address and blend into framebuffer
     uint32 *destination_pixel = (uint32 *)((uint8 *)buffer->Memory + pixel_x*buffer->BytesPerPixel + pixel_y*buffer->Pitch);
     *destination_pixel = BlendPixel(color, *destination_pixel);
@@ -239,8 +242,6 @@ internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordi
         real32 delta_x = end_x - start_x;
         real32 delta_y = end_y - start_y;
         real32 slope   = delta_y / delta_x;
-
-		//if delta_x > 1000.0f, delta_x = 100.0f
 
         // step along x, blend two pixels per column based on fractional y distance
         for(int step = 0; step < (int32)delta_x; ++step){
@@ -723,6 +724,111 @@ internal coordinate ndc_to_screen(coordinate ndc_point, uint32 width, uint32 hei
 	return normalised;
 }
 
+internal real32 slope_from_coordinates(coordinate A, coordinate B){
+	if (B.x - A.x == 0.0f) {
+        return 0.0f; //avoiding divide by 0 error
+    }
+	
+	return (A.y - B.y) / (A.x - B.x);
+}
+
+internal real32
+x_at_y(coordinate A, coordinate B, real32 slope, real32 current_y){
+	if (A.x == B.x){
+		return A.x; // vertical edge: x is constant regardless of y
+	}
+	return ((current_y - A.y) / slope) + A.x;
+}
+
+internal void ScanFill(game_offscreen_buffer *Buffer, coordinate a, coordinate b, coordinate c, uint32 color){
+	coordinate bound_y_min;
+	coordinate bound_y_mid;
+	coordinate bound_y_max;
+ 
+	//Sorts the 3 2d-coordinates into 3 positions, smallest to largest
+	//just be happy I didnt use nested : ? ternary operators
+
+	if ((a.y <= b.y) && (a.y <= c.y) ){bound_y_min = a;if (b.y <= c.y){
+			bound_y_mid = b;
+			bound_y_max = c;
+		}
+		else {
+			bound_y_mid = c;
+			bound_y_max = b;
+		}
+	} 
+	else if (b.y <= c.y){ 
+		bound_y_min = b; 
+		if (a.y <= c.y){
+			bound_y_mid = a;
+			bound_y_max = c;
+		}
+		else {
+			bound_y_mid = c;
+			bound_y_max = a;
+		}
+	} 
+	else { 
+		bound_y_min = c; 
+		if (a.y <= b.y){
+			bound_y_mid = a;
+			bound_y_max = b;
+		}
+		else{
+			bound_y_mid = b;
+			bound_y_max = a;
+		}
+	}
+
+	real32 slope_long      = slope_from_coordinates(bound_y_max, bound_y_min);
+	real32 slope_short_top = slope_from_coordinates(bound_y_max, bound_y_mid);
+	real32 slope_short_bot = slope_from_coordinates(bound_y_mid, bound_y_min);
+
+	real32 x_pos_left;
+	real32 x_pos_right;
+	for(uint32 scan_index = 0; scan_index < uint32(bound_y_max.y - bound_y_mid.y); ++scan_index){
+		real32 current_y = bound_y_max.y - scan_index;
+
+		real32 x_pos_1 = x_at_y(bound_y_mid, bound_y_max, slope_short_top, current_y);
+		real32 x_pos_2 = x_at_y(bound_y_min, bound_y_max, slope_long, current_y);
+
+		if (x_pos_2 >= x_pos_1){
+			x_pos_right = x_pos_2; 
+			x_pos_left  = x_pos_1;
+		}
+		else{
+			x_pos_right = x_pos_1;
+			x_pos_left  = x_pos_2;
+		}
+		uint32 pixel_counter = 0;
+		while ( pixel_counter <= (uint32)RoundReal32ToInt32(x_pos_right - x_pos_left)){
+			DrawPixel(Buffer, RoundReal32ToInt32(x_pos_left)+ pixel_counter, RoundReal32ToInt32(current_y), color);
+			pixel_counter++;
+		}
+	}	
+
+	for(uint32 scan_index = 0; scan_index < uint32(bound_y_mid.y - bound_y_min.y); ++scan_index){
+		real32 current_y = bound_y_mid.y - scan_index;
+
+		real32 x_pos_1 = x_at_y(bound_y_mid, bound_y_min, slope_short_bot, current_y);
+		real32 x_pos_2 = x_at_y(bound_y_min, bound_y_max, slope_long, current_y);
+
+		if (x_pos_2 >= x_pos_1){
+			x_pos_right = x_pos_2; 
+			x_pos_left  = x_pos_1;
+		}
+		else{
+			x_pos_right = x_pos_1;
+			x_pos_left  = x_pos_2;
+		}
+		uint32 pixel_counter = 0;
+		while ( pixel_counter <= (uint32)RoundReal32ToInt32(x_pos_right - x_pos_left)){
+			DrawPixel(Buffer, RoundReal32ToInt32(x_pos_left)+ pixel_counter, RoundReal32ToInt32(current_y), color);
+			pixel_counter++;
+		}
+	}	
+
+}
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	//Void unused parameter to make compiler happy
@@ -756,13 +862,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		coordinate penger_world_coordinate7 = {0.0f, 100.0f, -1.0f};
 
 
-		spawn_entity(GameState, bugatti_mesh_dest, bugatti_world_coordinate , 0xFF90EE90);
-		/*spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate2, 0xFFFF9090);
+		//spawn_entity(GameState, bugatti_mesh_dest, bugatti_world_coordinate , 0xFF90EE90);
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate2, 0xFFFF9090);
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate3, 0xFF9090FF);
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate4, 0xFF9090FF); 
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate5, 0xFF9090FF); 
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate6, 0xFF9090FF); 
-		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate7, 0xFF9090FF);*/
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate7, 0xFF9090FF);
 
 
 		
@@ -777,7 +883,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	GameState->timer += timedelta;
 	
 	
-	real32 camera_speed = 3.0f;
+	real32 camera_speed = 30.0f;
 	real32 camera_rotation_speed = 2.0f;
 	//For loop for multiple controller
 	for(uint32 ControllerIndex = 0; ControllerIndex <(uint32)(ArrayCount(Input->Controllers)); ++ControllerIndex){
@@ -847,6 +953,51 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		for(uint32 face_index = 0; face_index < current_mesh->face_count; ++face_index)
 		{
 			mesh_face *current_face = &current_mesh->faces[face_index];
+	
+			int32 vertex_a = current_face->vertex_index[0];
+			int32 vertex_b = current_face->vertex_index[1];
+			int32 vertex_c = current_face->vertex_index[2];
+
+			// world + camera space, computed fresh per edge instead of cached per vertex
+			coordinate world_a  = model_to_world(current_mesh->vertices[vertex_a], &current_entity->entity_transform);
+			coordinate world_b  = model_to_world(current_mesh->vertices[vertex_b], &current_entity->entity_transform);
+			coordinate world_c  = model_to_world(current_mesh->vertices[vertex_c], &current_entity->entity_transform);
+			coordinate camera_a = world_to_camera(world_a, &camera_transform);
+			coordinate camera_b = world_to_camera(world_b, &camera_transform);
+			coordinate camera_c = world_to_camera(world_c, &camera_transform);
+
+			if(!clip_edge_to_near_plane(&camera_a, &camera_b, near_plane))
+			{
+					continue; // whole edge behind camera, skip drawing it
+			}
+
+			coordinate pixel_a = ndc_to_screen(camera_to_ndc(camera_a), (uint32)Buffer->Width, (uint32)Buffer->Height);
+			coordinate pixel_b = ndc_to_screen(camera_to_ndc(camera_b), (uint32)Buffer->Width, (uint32)Buffer->Height);
+			coordinate pixel_c = ndc_to_screen(camera_to_ndc(camera_c), (uint32)Buffer->Width, (uint32)Buffer->Height);
+
+				// Limits rendering space to within window size + 200 pixel edge buffer,
+			real32 pixel_edge_buffer = 200;
+			if(pixel_a.x < -pixel_edge_buffer || pixel_a.x >= (real32)Buffer->Width  + pixel_edge_buffer) { continue; }
+			if(pixel_a.y < -pixel_edge_buffer || pixel_a.y >= (real32)Buffer->Height + pixel_edge_buffer) { continue; }
+
+			if(pixel_b.x < -pixel_edge_buffer || pixel_b.x >= (real32)Buffer->Width  + pixel_edge_buffer) { continue; }
+			if(pixel_b.y < -pixel_edge_buffer || pixel_b.y >= (real32)Buffer->Height + pixel_edge_buffer) { continue; }
+
+			if(pixel_c.x < -pixel_edge_buffer || pixel_c.x >= (real32)Buffer->Width  + pixel_edge_buffer) { continue; }
+			if(pixel_c.y < -pixel_edge_buffer || pixel_c.y >= (real32)Buffer->Height + pixel_edge_buffer) { continue; }
+
+			ScanFill(Buffer, pixel_a, pixel_b, pixel_c, current_entity->color);
+		}
+	}
+ /*
+	for(uint32 entity_index = 0; entity_index < GameState->EntityCount; ++entity_index)
+	{
+		entity *current_entity = &GameState->Entities[entity_index];
+		mesh   *current_mesh   = current_entity->entity_mesh;
+
+		for(uint32 face_index = 0; face_index < current_mesh->face_count; ++face_index)
+		{
+			mesh_face *current_face = &current_mesh->faces[face_index];
 			for(uint32 face_vertex_index = 0; face_vertex_index < current_face->vertex_count; ++face_vertex_index)
 			{
 				int32 vertex_a = current_face->vertex_index[face_vertex_index];
@@ -880,32 +1031,49 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 			}
 		}
 	}
+		*/
+	//TODO:  Change face loop to use ScanFill() instead of drawline
+	/*
+	Model_to_screen pipeline 3 points instead of 2
+	change clipping function
+	 ScanFill()
+	 	triangle's bounding box (min/max X and Y among its three corners).
+		test whether the pixel's center lies inside the triangle 
+		(a well-known test using "barycentric coordinates" or the "edge function" method — 
+		checking whether the point is on the correct side of all three edges).
+		If inside, color that pixel.
+	Z-Buffering
+	
+	Normals tell which direction of face is outwards?
+	What is an obj VT, u, v, w ?
+	Should Model_to_screen pipeline be called on a per vertex basis?
+	
+	*/
+
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 
 
 
-RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-EndTemporaryMemory(temp_memory);
+	
+	
+	
+	
+	
+	RenderPlayer(Buffer, Input->MouseX, Input->MouseY);
+	EndTemporaryMemory(temp_memory);
 }
 
 //has to be a fast function, no more than 1ms!
