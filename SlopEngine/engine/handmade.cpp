@@ -597,7 +597,7 @@ internal coordinate camera_to_ndc(coordinate camera_point){
 	return projection;
 }
 
-internal coordinate ndc_to_screen(coordinate ndc_point, int width, int height){
+internal coordinate ndc_to_screen(coordinate ndc_point, uint32 width, uint32 height){
 	coordinate normalised = {};
  	normalised.x = 	   ((ndc_point.x + 1)/2)*(real32)width  - 0.5f;
 	normalised.y = (1 - (ndc_point.y + 1)/2)*(real32)height - 0.5f;
@@ -744,8 +744,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 					continue; // whole edge behind camera, skip drawing it
 				}
 
-				coordinate pixel_a = ndc_to_screen(camera_to_ndc(camera_a), Buffer->Width, Buffer->Height);
-				coordinate pixel_b = ndc_to_screen(camera_to_ndc(camera_b), Buffer->Width, Buffer->Height);
+				coordinate pixel_a = ndc_to_screen(camera_to_ndc(camera_a), (uint32)Buffer->Width, (uint32)Buffer->Height);
+				coordinate pixel_b = ndc_to_screen(camera_to_ndc(camera_b), (uint32)Buffer->Width, (uint32)Buffer->Height);
 
 				DrawLine(Buffer, pixel_a, pixel_b, current_entity->color);
 			}
