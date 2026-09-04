@@ -10,12 +10,10 @@
 
 #include <stdio.h>
 
-//max path
-#define PLATFORM_STATE_FILE_NAME_COUNT 260
 
 struct platform_replay_buffer
 {
-	char   Filename[PLATFORM_STATE_FILE_NAME_COUNT];
+	char   Filename[FILE_NAME_COUNT];
 	void  *MemoryBlock;
 };
 
@@ -30,7 +28,7 @@ struct platform_state
 	int input_recording_index;
 	int input_playing_index;
 
-	char exe_file_name[PLATFORM_STATE_FILE_NAME_COUNT];
+	char exe_file_name[FILE_NAME_COUNT];
 	char *one_past_last_exe_file_name_slash; //win32 era leftover
 };
 
@@ -47,41 +45,7 @@ global_variable bool GlobalRunning;
 global_variable bool GlobalPause;
 global_variable uint64 GlobalPerfCountFrequency;
 
-//ghetto string concatenation
-internal void StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB, size_t DestCount, char *Dest){
-	for (size_t index = 0; index < SourceACount; ++index){
-		*Dest++ = *SourceA++;
-	}
-	for (size_t index = 0; index < SourceBCount; ++index){
-		*Dest++ = *SourceB++;
-	}
-	//TODO dest bounds checking
-	//cc strings end with null terminator
-	*Dest++ = 0;
-}
-internal size_t StringLength(const char *String){
-	size_t CharCount = 0;
-	//if *String != 0 count, remember C strings are null terminated!
-	while(*String++){
-		++CharCount;
-	}
-	return CharCount;
-}
 
-internal void
-StringCopy(size_t SourceCount, const char *Source, size_t DestCount, char *Dest)
-{
-	// Assert instead of silently truncating
-	// so oversized paths get caught immediately in debug builds
-	Assert(SourceCount < DestCount);
-
-	for(size_t Index = 0; Index < SourceCount; ++Index)
-	{
-		Dest[Index] = Source[Index];
-	}
-
-	Dest[SourceCount] = 0;
-}
 
 inline uint64
 SDLGetWallClock(void)
@@ -189,8 +153,25 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile){
 
 	if(FileData)
 	{
-		Result.Contents     = FileData;
-		Result.ContentsSize = SafeTruncateUInt64(FileSize);
+		// Guarantee a terminating null byte one past the actual content,
+		// so every downstream text parser can safely use standard C
+		// string functions (strtof, strtol, strchr, etc.) instead of
+		// tracking explicit end-of-buffer bounds themselves.
+		void *NullTerminatedData = SDL_realloc(FileData, FileSize + 1);
+		if(NullTerminatedData)
+		{
+			((char *)NullTerminatedData)[FileSize] = 0;
+			Result.Contents     = NullTerminatedData;
+			Result.ContentsSize = SafeTruncateUInt64(FileSize);
+		}
+		else
+		{
+			SDL_free(FileData);
+		}
+	}
+	else
+	{
+		SDL_Log("Failed to load file: %s", SDL_GetError());
 	}
 
 	return(Result);
@@ -228,7 +209,7 @@ internal void SDLBeginRecordingInput(platform_state *State, int input_recording_
 	if(replay_buffer->MemoryBlock){
 		State->input_recording_index = input_recording_index;
 
-		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
+		char filename[FILE_NAME_COUNT];
 		SDLGetInputFileLocation(State, true, input_recording_index, sizeof(filename), filename);
 		State->RecordingHandle = SDL_IOFromFile(filename, "wb");
 		memcpy(replay_buffer->MemoryBlock, State->GameMemoryBlock, State->TotalSize);
@@ -247,7 +228,7 @@ internal void SDLBeginInputPlayback(platform_state *State, int input_playing_ind
 	if(replay_buffer->MemoryBlock){
 		State->input_playing_index =  input_playing_index;
 				
-		char filename[PLATFORM_STATE_FILE_NAME_COUNT];
+		char filename[FILE_NAME_COUNT];
 		SDLGetInputFileLocation(State, true, input_playing_index, sizeof(filename), filename);
 		State->PlaybackHandle = SDL_IOFromFile(filename, "rb");
 		memcpy(State->GameMemoryBlock, replay_buffer->MemoryBlock, State->TotalSize);
@@ -326,13 +307,13 @@ PlatformProcessPendingEvents(platform_state *State, game_controller_input *Keybo
 			case SDL_EVENT_KEY_UP:
 			{
 				bool32 IsDown = (Event.type == SDL_EVENT_KEY_DOWN);
-				bool32 WasDown = (Event.key.repeat != 0);
+				bool32 IsRepeat = (Event.key.repeat != 0);
 
 				// TODO: map Event.key.scancode to KeyboardController buttons,
 				// e.g.:
 				// if (Event.key.scancode == SDL_SCANCODE_W)
 				//     Win32ProcessKeyboardMessage(&KeyboardController->MoveUp, IsDown);
-				if (WasDown != IsDown)
+				if (!IsRepeat)
 				{
 					if      (Event.key.scancode == SDL_SCANCODE_W)        { SDLProcessKeyboardMessage(&KeyboardController->MoveUp, 	     IsDown);}
 					else if (Event.key.scancode == SDL_SCANCODE_A)        { SDLProcessKeyboardMessage(&KeyboardController->MoveLeft, 	 IsDown);}
@@ -390,7 +371,7 @@ int main(int argc, char *argv[])
 	platform_state State = {};
 	SDLGetEXEFileName(&State);
 
-	char SourceGameCodeDLLFullPath[PLATFORM_STATE_FILE_NAME_COUNT];
+	char SourceGameCodeDLLFullPath[FILE_NAME_COUNT];
 #if defined(_WIN32)
     char SourceGameCodeDLLFileName[] = "handmade.dll";
     char TempGameCodeDLLFileName[]   = "handmade_temp.dll";
@@ -401,9 +382,10 @@ int main(int argc, char *argv[])
 	SDLBuildEXEPathFileName(&State, SourceGameCodeDLLFileName,
 							   sizeof(SourceGameCodeDLLFullPath), SourceGameCodeDLLFullPath);
 
-	char TempGameCodeDLLFullPath[PLATFORM_STATE_FILE_NAME_COUNT];
+	char TempGameCodeDLLFullPath[FILE_NAME_COUNT];
 	SDLBuildEXEPathFileName(&State, TempGameCodeDLLFileName,
 							   sizeof(TempGameCodeDLLFullPath), TempGameCodeDLLFullPath);
+	
 	
 
 #if defined(_WIN32)
@@ -440,7 +422,7 @@ int main(int argc, char *argv[])
 	thread_context Thread = {};
 
 	game_memory GameMemory = {};
-	GameMemory.PermanentStorageSize = Megabytes(64);
+	GameMemory.PermanentStorageSize = Megabytes(256);
 	GameMemory.TransientStorageSize = Gigabytes((uint64)1);		
 	GameMemory.DEBUGPlatformFreeFileMemory  = DEBUGPlatformFreeFileMemory;
 	GameMemory.DEBUGPlatformReadEntireFile  = DEBUGPlatformReadEntireFile;
@@ -456,6 +438,8 @@ void* BaseAddress = 0;
 	GameMemory.PermanentStorage = State.GameMemoryBlock;
 	GameMemory.TransientStorage = ((uint8 *)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);
 
+	//save data path to game memory, so engine layer knows where to request file loads
+	SDLBuildEXEPathFileName(&State, (char *)"../SlopEngine/data/", sizeof(GameMemory.DataPath), GameMemory.DataPath);
 	// NEW: allocate a snapshot buffer for each replay slot
 	for (uint64 ReplayIndex = 0; ReplayIndex < ArrayCount(State.ReplayBuffers); ++ReplayIndex)
 	{
@@ -589,41 +573,43 @@ void* BaseAddress = 0;
 
 			}
 					
-			// Frame pacing, cpu melting solution of sleeping
-			uint64 WorkCounter = SDLGetWallClock();
-			real32 WorkSecondsElapsed = SDLGetSecondsElapsed(LastCounter, WorkCounter);
-			real32 SecondsElapsedForFrame = WorkSecondsElapsed;
-
-			if (SecondsElapsedForFrame < TargetSecondsPerFrame)
-			{
-				if (SleepIsGranular)
-				{
-					uint32 SleepMS = (uint32)(1000.0f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
-					if (SleepMS > 0)
-					{
-						SDL_Delay(SleepMS);
-					}
-				}
-
-				// Spin the remainder — Delay/Sleep can overshoot or undershoot,
-				// so busy-wait to land exactly on the frame boundary.
-				while (SecondsElapsedForFrame < TargetSecondsPerFrame)
-				{
-					SecondsElapsedForFrame = SDLGetSecondsElapsed(LastCounter, SDLGetWallClock());
-				}
-			}
-			else
-			{
-				// TODO: missed frame — log this
-			}
-
-			uint64 EndCounter = SDLGetWallClock();
-			LastCounter = EndCounter;
 
 			game_input *Temp = NewInput;
 			NewInput = OldInput;
 			OldInput = Temp;
 		}
+
+				// Frame pacing, cpu melting solution of sleeping
+		uint64 WorkCounter = SDLGetWallClock();
+		real32 WorkSecondsElapsed = SDLGetSecondsElapsed(LastCounter, WorkCounter);
+		real32 SecondsElapsedForFrame = WorkSecondsElapsed;
+
+		if (SecondsElapsedForFrame < TargetSecondsPerFrame)
+		{
+			if (SleepIsGranular)
+			{
+				uint32 SleepMS = (uint32)(1000.0f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
+				if (SleepMS > 0)
+				{
+					SDL_Delay(SleepMS);
+				}
+			}
+
+			// Spin the remainder — Delay/Sleep can overshoot or undershoot,
+			// so busy-wait to land exactly on the frame boundary.
+			while (SecondsElapsedForFrame < TargetSecondsPerFrame)
+			{
+				SecondsElapsedForFrame = SDLGetSecondsElapsed(LastCounter, SDLGetWallClock());
+			}
+		}
+		else
+		{
+			// TODO: missed frame — log this
+		}
+
+		uint64 EndCounter = SDLGetWallClock();
+		LastCounter = EndCounter;
+
 	}
 
 	SDLUnloadGameCode(&Game);

@@ -11,6 +11,9 @@
 //such as passing foo+bar next to [0] for bar[0]
 
 
+//max path
+#define FILE_NAME_COUNT 260
+
 
 /*
 HANDMADE_INTERNAL:
@@ -65,9 +68,9 @@ struct thread_context{
 
 //NOT for shipping! Blocking and write doesnt protect against lost data!
 struct debug_read_file_result
-{   
-    uint32 ContentsSize;
-    void *Contents;
+{
+	uint32 ContentsSize;
+	void  *Contents; // guaranteed to have a null terminator at Contents[ContentsSize]
 };
 
 
@@ -77,7 +80,7 @@ debug_read_file_result DEBUGPlatformReadEntireFile(char *Filename);
 void DEBUGPlatformFreeFileMemory(void *Memory);
 bool32 DEBUGPlatformWriteEntireFile(char *Filename, uint32 MemorySize, void *Memory);
 */
-#define DEBUG_PLATFORM_FREE_FILE_MEMORY(name) void name (thread_context *Thread, void *Memory, uint64 Size)
+#define DEBUG_PLATFORM_FREE_FILE_MEMORY(name) void name (thread_context *Thread, void *Memory)
 typedef DEBUG_PLATFORM_FREE_FILE_MEMORY(debug_platform_free_file_memory);
 
 #define DEBUG_PLATFORM_WRITE_ENTIRE_FILE(name) bool32 name (thread_context *Thread, char *Filename, uint32 MemorySize, void *Memory)
@@ -165,7 +168,7 @@ struct game_memory{
     void *PermanentStorage; //REQUIRED to be cleared to 0
     uint64 TransientStorageSize;
     void *TransientStorage;  //REQUIRED to be cleared to 0
-
+    char DataPath[FILE_NAME_COUNT]; 
 
     //function pointers to debug functions
     //c++ vtable dispatch like
@@ -185,19 +188,42 @@ extern "C" void GameGetSoundSamples(thread_context *Thread, game_memory *Memory,
 #define GAME_GET_SOUND_SAMPLES(name) void name (thread_context *Thread, game_memory *Memory, game_sound_output_buffer *SoundBuffer)
 typedef GAME_GET_SOUND_SAMPLES(game_get_sound_samples);
 
+//ghetto string concatenation
+internal void StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB, size_t DestCount, char *Dest){
+	for (size_t index = 0; index < SourceACount; ++index){
+		*Dest++ = *SourceA++;
+	}
+	for (size_t index = 0; index < SourceBCount; ++index){
+		*Dest++ = *SourceB++;
+	}
+	//TODO dest bounds checking
+	//cc strings end with null terminator
+	*Dest++ = 0;
+}
+internal size_t StringLength(const char *String){
+	size_t CharCount = 0;
+	//if *String != 0 count, remember C strings are null terminated!
+	while(*String++){
+		++CharCount;
+	}
+	return CharCount;
+}
 
+internal void
+StringCopy(size_t SourceCount, const char *Source, size_t DestCount, char *Dest)
+{
+	// Assert instead of silently truncating
+	// so oversized paths get caught immediately in debug builds
+	Assert(SourceCount < DestCount);
 
-struct entity{
-    real32 X;
-    real32 Y;
-    real32 Z;
-    real32 Width;
-    real32 Height;
-    uint32 Color;
-    real32 VelocityX;
-    real32 VelocityY;
-    bool32 IsActive;
-};
+	for(size_t Index = 0; Index < SourceCount; ++Index)
+	{
+		Dest[Index] = Source[Index];
+	}
+
+	Dest[SourceCount] = 0;
+}
+
 
 
 struct memory_arena{
@@ -212,28 +238,67 @@ struct temporary_memory{
 };
 
 struct coordinate{
-	real32 x;
+    real32 x;
 	real32 y;
     real32 z;
 };
 
+//conventional name for position + rotation (from model to world space) + size
+struct transform
+{
+    coordinate position;
+    real32     rotation_yaw; 
+    //uint32 size
+};
+
+struct camera
+{
+    transform camera_transform;
+    real32    fov;
+    real32    near_plane;
+    real32    far_plane;
+};
+//max meshes
+#define MAX_MESHES 16
+
+struct mesh_face
+{
+	int32 vertex_index[4];
+	uint32 vertex_count;
+};
+
+struct mesh
+{
+    coordinate *vertices;
+	uint32       vertex_count;
+    
+	mesh_face  *faces;
+	uint32       face_count;
+};
 
 #define MAX_ENTITIES 1024
 
-struct game_state{
-    int EntityCount;
-    entity Entities[MAX_ENTITIES];
+struct entity{
+    transform entity_transform;
+    mesh *entity_mesh;
+    uint32 color;
 
-    real32 timer;
-    coordinate coordinates;
-
-    //only used for sound example
-    real32 tSine;
-
-
-    //arena is important
-    memory_arena Arena;
+    bool32 IsActive;
 };
+
+
+struct game_state
+{
+    memory_arena Arena;
+    real32       timer;
+    transform    camera_transform; 
+    real32       tSine;
+    entity       Entities[MAX_ENTITIES];
+    uint32       EntityCount;
+    mesh         Meshes[MAX_MESHES];
+    uint32       MeshCount;
+};
+
 
 
 //only for gamelayer atm
@@ -245,6 +310,10 @@ struct game_state{
 internal void *ArenaPush(memory_arena *Arena, size_t Size);
 
 internal void *ArenaPushZero(memory_arena *Arena, size_t Size);
+
+internal size_t StringLength(const char *String);
+
+internal void StringConcat(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB, size_t DestCount, char *Dest);
 
 #define HANDMADE_H
 #endif
