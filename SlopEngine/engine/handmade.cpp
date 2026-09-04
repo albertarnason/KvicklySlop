@@ -154,7 +154,7 @@ internal void DrawCenteredBoxCoordinate(game_offscreen_buffer *Buffer, coordinat
 
 //stupid claude way to draw line
 internal void DrawLine_old(game_offscreen_buffer *Buffer, coordinate a, coordinate b, uint32 color){
-    int steps = 1000;
+    int steps = 100;
     for(int s = 0; s <= steps; ++s){
         real32 t = (real32)s / (real32)steps;
         real32 x = a.x + t * (b.x - a.x);
@@ -202,7 +202,17 @@ internal void DrawPixel(game_offscreen_buffer *buffer, int32 pixel_x, int32 pixe
 }
 
 internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordinate point_b, uint32 color){
-    real32 start_x = point_a.x;
+    
+	// Limits rendering space to within window size + 200 pixel edge buffer,
+	//TODO: extract into function, place before ANY draw calls
+	real32 pixel_edge_buffer = 200;
+	if(point_a.x < -pixel_edge_buffer || point_a.x >= buffer->Width  + pixel_edge_buffer) { return; }
+    if(point_a.y < -pixel_edge_buffer || point_a.y >= buffer->Height + pixel_edge_buffer) { return; }
+
+	if(point_b.x < -pixel_edge_buffer || point_b.x >= buffer->Width  + pixel_edge_buffer) { return; }
+    if(point_b.y < -pixel_edge_buffer || point_b.y >= buffer->Height + pixel_edge_buffer) { return; }
+	
+	real32 start_x = point_a.x;
     real32 start_y = point_a.y;
     real32 end_x   = point_b.x;
     real32 end_y   = point_b.y;
@@ -229,6 +239,8 @@ internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordi
         real32 delta_x = end_x - start_x;
         real32 delta_y = end_y - start_y;
         real32 slope   = delta_y / delta_x;
+
+		//if delta_x > 1000.0f, delta_x = 100.0f
 
         // step along x, blend two pixels per column based on fractional y distance
         for(int step = 0; step < (int32)delta_x; ++step){
@@ -551,6 +563,31 @@ internal coordinate world_to_camera(coordinate world_point, transform *camera_tr
 	return result;
 }
 
+internal bool32 clip_edge_to_near_plane(coordinate *camera_point_a, coordinate *camera_point_b, real32 near_plane){
+
+	if (camera_point_a->z < near_plane && camera_point_b->z < near_plane){
+		return false;
+	}
+
+	if (camera_point_a->z < near_plane){
+		real32 t = (near_plane - camera_point_a->z) / (camera_point_b->z - camera_point_a->z);
+		camera_point_a->x = camera_point_a->x + t * (camera_point_b->x - camera_point_a->x);
+		camera_point_a->y = camera_point_a->y + t * (camera_point_b->y - camera_point_a->y);
+		camera_point_a->z = near_plane;
+	}
+
+	if (camera_point_b->z < near_plane){
+		real32 t = (near_plane - camera_point_b->z) / (camera_point_a->z - camera_point_b->z);
+		camera_point_b->x = camera_point_b->x + t * (camera_point_a->x - camera_point_b->x);
+		camera_point_b->y = camera_point_b->y + t * (camera_point_a->y - camera_point_b->y);
+		camera_point_b->z = near_plane;
+	}
+
+	return true;
+}
+// returns false if the edge should be discarded entirely (both points behind)
+// otherwise adjusts whichever endpoint is behind the near plane in-place
+
 internal coordinate camera_to_ndc(coordinate camera_point){
 	coordinate projection = {};
 	projection.x = camera_point.x/camera_point.z;
@@ -560,7 +597,7 @@ internal coordinate camera_to_ndc(coordinate camera_point){
 
 internal coordinate ndc_to_screen(coordinate ndc_point, int width, int height){
 	coordinate normalised = {};
- 	normalised.x = ((ndc_point.x + 1)/2)*(real32)width  - 0.5f;
+ 	normalised.x = 	   ((ndc_point.x + 1)/2)*(real32)width  - 0.5f;
 	normalised.y = (1 - (ndc_point.y + 1)/2)*(real32)height - 0.5f;
 	normalised.z = ndc_point.z;
 	return normalised;
@@ -588,14 +625,24 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 
 		//penger loading, parsing, printf, memory freeing
 		mesh* penger_mesh_dest = load_obj_file(GameState, Memory, Thread, (char *)"real-penger.obj");
-		coordinate penger_world_coordinate  = {1.0f, 0.0f, 0.0f};
+		coordinate penger_world_coordinate  = {1.0f, -1.0f, 0.0f};
 		coordinate penger_world_coordinate2 = {0.0f, 0.0f, 0.0f};
-		coordinate penger_world_coordinate3 = {-2.0f, -1.5f, 2.0f};
-		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate , 0xFF90EE90);
-		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate2, 0xFFFF9090); // second penger, different position
-		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate3, 0xFF9090FF); // different model entirely
+		coordinate penger_world_coordinate3 = {2.0f, 10.0f, -1.0f};
+		coordinate penger_world_coordinate4 = {4.0f, -2.0f, -1.0f};
+		coordinate penger_world_coordinate5 = {5.0f, 0.0f, -1.0f};
+		coordinate penger_world_coordinate6 = {6.0f, 3.0f, -1.0f};
+		coordinate penger_world_coordinate7 = {0.0f, 100.0f, -1.0f};
 
-		
+
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate , 0xFF90EE90);
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate2, 0xFFFF9090);
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate3, 0xFF9090FF);
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate4, 0xFF9090FF); 
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate5, 0xFF9090FF); 
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate6, 0xFF9090FF); 
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate7, 0xFF9090FF); 
+
+
 		
 		
 		
@@ -662,7 +709,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	
 	
 	transform camera_transform = camera_get_transform(GameState);
-
+	real32 near_plane = 0.3f;
 
 	//quick loop for rotating by game speed
 	for(uint32 entity_index = 0; entity_index < GameState->EntityCount; ++entity_index)
@@ -675,20 +722,6 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		entity *current_entity = &GameState->Entities[entity_index];
 		mesh   *current_mesh   = current_entity->entity_mesh;
 
-		coordinate *screen_points = (coordinate *)ArenaPush(&GameState->Arena, sizeof(coordinate) * current_mesh->vertex_count);
-
-		for(uint32 vertex_index = 0; vertex_index < current_mesh->vertex_count; ++vertex_index)
-		{
-			coordinate *source_vertex = &current_mesh->vertices[vertex_index];
-
-			coordinate world_point = model_to_world(*source_vertex, &current_entity->entity_transform);
-			coordinate camera_point = world_to_camera(world_point, &camera_transform);
-			coordinate ndc_point    = camera_to_ndc(camera_point);
-			coordinate pixel_point  = ndc_to_screen(ndc_point, Buffer->Width, Buffer->Height);
-
-			screen_points[vertex_index] = pixel_point;
-		}
-
 		for(uint32 face_index = 0; face_index < current_mesh->face_count; ++face_index)
 		{
 			mesh_face *current_face = &current_mesh->faces[face_index];
@@ -697,7 +730,22 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 				int32 vertex_a = current_face->vertex_index[face_vertex_index];
 				int32 vertex_b = current_face->vertex_index[(face_vertex_index + 1) % current_face->vertex_count];
 
-				DrawLine(Buffer, screen_points[vertex_a], screen_points[vertex_b], current_entity->color);
+				// world + camera space, computed fresh per edge instead of cached per vertex
+				coordinate world_a  = model_to_world(current_mesh->vertices[vertex_a], &current_entity->entity_transform);
+				coordinate world_b  = model_to_world(current_mesh->vertices[vertex_b], &current_entity->entity_transform);
+				coordinate camera_a = world_to_camera(world_a, &camera_transform);
+				coordinate camera_b = world_to_camera(world_b, &camera_transform);
+
+				// clip in camera space, before projection
+				if(!clip_edge_to_near_plane(&camera_a, &camera_b, near_plane))
+				{
+					continue; // whole edge behind camera, skip drawing it
+				}
+
+				coordinate pixel_a = ndc_to_screen(camera_to_ndc(camera_a), Buffer->Width, Buffer->Height);
+				coordinate pixel_b = ndc_to_screen(camera_to_ndc(camera_b), Buffer->Width, Buffer->Height);
+
+				DrawLine(Buffer, pixel_a, pixel_b, current_entity->color);
 			}
 		}
 	}

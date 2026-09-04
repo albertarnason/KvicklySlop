@@ -422,7 +422,7 @@ int main(int argc, char *argv[])
 	thread_context Thread = {};
 
 	game_memory GameMemory = {};
-	GameMemory.PermanentStorageSize = Megabytes(64);
+	GameMemory.PermanentStorageSize = Megabytes(256);
 	GameMemory.TransientStorageSize = Gigabytes((uint64)1);		
 	GameMemory.DEBUGPlatformFreeFileMemory  = DEBUGPlatformFreeFileMemory;
 	GameMemory.DEBUGPlatformReadEntireFile  = DEBUGPlatformReadEntireFile;
