@@ -932,13 +932,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 		coordinate penger_world_coordinate7 = {0.0f, 100.0f, -1.0f};
 
 
-		//spawn_entity(GameState, bugatti_mesh_dest, bugatti_world_coordinate , 0xFF90EE90);
-		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate2, 0xFFFF9090);
+		spawn_entity(GameState, bugatti_mesh_dest, bugatti_world_coordinate , 0xFF90EE90);
+		/*spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate2, 0xFFFF9090);
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate3, 0xFF9090FF);
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate4, 0xFF9090FF); 
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate5, 0xFF9090FF); 
 		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate6, 0xFF9090FF); 
-		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate7, 0xFF9090FF);
+		spawn_entity(GameState, penger_mesh_dest, penger_world_coordinate7, 0xFF9090FF);*/
 
 
 		
@@ -953,7 +953,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 	GameState->timer += timedelta;
 	
 	
-	real32 camera_speed = 30.0f;
+	real32 camera_speed = 300.0f;
 	real32 camera_rotation_speed = 2.0f;
 	//For loop for multiple controller
 	for(uint32 ControllerIndex = 0; ControllerIndex <(uint32)(ArrayCount(Input->Controllers)); ++ControllerIndex){
@@ -1063,7 +1063,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 			}
 		}
 	}
- /*
+ /* Line drawing loop
 	for(uint32 entity_index = 0; entity_index < GameState->EntityCount; ++entity_index)
 	{
 		entity *current_entity = &GameState->Entities[entity_index];
@@ -1105,17 +1105,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender){
 			}
 		}
 	}
-		*/
-	//TODO:  Change face loop to use ScanFill() instead of drawline
-	/*
-	Model_to_screen pipeline 3 points instead of 2
-	change clipping function
-	 ScanFill()
-	 	triangle's bounding box (min/max X and Y among its three corners).
-		test whether the pixel's center lies inside the triangle 
-		(a well-known test using "barycentric coordinates" or the "edge function" method — 
-		checking whether the point is on the correct side of all three edges).
-		If inside, color that pixel.
+
 	Z-Buffering
 	
 	Normals tell which direction of face is outwards?
