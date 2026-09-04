@@ -206,11 +206,11 @@ internal void DrawLine(game_offscreen_buffer *buffer, coordinate point_a, coordi
 	// Limits rendering space to within window size + 200 pixel edge buffer,
 	//TODO: extract into function, place before ANY draw calls
 	real32 pixel_edge_buffer = 200;
-	if(point_a.x < -pixel_edge_buffer || point_a.x >= buffer->Width  + pixel_edge_buffer) { return; }
-    if(point_a.y < -pixel_edge_buffer || point_a.y >= buffer->Height + pixel_edge_buffer) { return; }
+	if(point_a.x < -pixel_edge_buffer || point_a.x >= (real32)buffer->Width  + pixel_edge_buffer) { return; }
+    if(point_a.y < -pixel_edge_buffer || point_a.y >= (real32)buffer->Height + pixel_edge_buffer) { return; }
 
-	if(point_b.x < -pixel_edge_buffer || point_b.x >= buffer->Width  + pixel_edge_buffer) { return; }
-    if(point_b.y < -pixel_edge_buffer || point_b.y >= buffer->Height + pixel_edge_buffer) { return; }
+	if(point_b.x < -pixel_edge_buffer || point_b.x >= (real32)buffer->Width  + pixel_edge_buffer) { return; }
+    if(point_b.y < -pixel_edge_buffer || point_b.y >= (real32)buffer->Height + pixel_edge_buffer) { return; }
 	
 	real32 start_x = point_a.x;
     real32 start_y = point_a.y;
