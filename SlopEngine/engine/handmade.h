@@ -248,7 +248,7 @@ struct transform
 {
     coordinate position;
     real32     rotation_yaw; 
-    //uint32 size
+    //uint32 scale
 };
 
 struct camera
@@ -258,12 +258,30 @@ struct camera
     real32    near_plane;
     real32    far_plane;
 };
+
+
+struct obj_face_vertex
+{
+	int32 vertex_index;
+	int32 texture_index;
+	int32 normal_index;
+};
+
+struct texture_coordinate
+{
+    real32 u;
+	real32 v;
+	real32 w;
+};
+
 //max meshes
 #define MAX_MESHES 16
 
 struct mesh_face
 {
 	int32 vertex_index[4];
+    int32 texture_index[4];
+    int32 normal_index[4];
 	uint32 vertex_count;
 };
 
@@ -272,6 +290,12 @@ struct mesh
     coordinate *vertices;
 	uint32       vertex_count;
     
+    texture_coordinate *texture_coordinates; // saves 'vt' (U,V,W), vector texture
+    uint32      texture_count;
+
+    coordinate *normals;             // saves 'vn' (X, Y, Z), vector normal
+    uint32      normal_count;
+
 	mesh_face  *faces;
 	uint32       face_count;
 };
